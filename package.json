@@ -1,0 +1,12 @@
+{
+  "name": "project-scanner",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "start": "netlify dev",
+    "test": "node --check scripts/main.js && node --check netlify/functions/scan-projects.js"
+  },
+  "engines": {
+    "node": ">=16.0.0"
+  }
+}
