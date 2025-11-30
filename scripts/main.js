@@ -5,6 +5,7 @@ const resultsGrid = document.getElementById('results');
 const duplicatesSection = document.getElementById('duplicates');
 const duplicateList = document.getElementById('duplicate-list');
 const pickButton = document.getElementById('pick-directory');
+const directoryPickerFallback = document.getElementById('directory-picker-input');
 const filtersSection = document.getElementById('filters');
 const searchInput = document.getElementById('search');
 const technologyFilter = document.getElementById('technology-filter');
@@ -25,9 +26,32 @@ function setStatus(message, mode = 'idle') {
   statusEl.className = `status status--${mode}`;
 }
 
+function setDirectoryFromFiles(fileList) {
+  const [first] = fileList || [];
+  if (!first) {
+    setStatus('Directory selection was cancelled.', 'warn');
+    return;
+  }
+
+  const relativePath = first.webkitRelativePath || '';
+  const topLevelFolder = relativePath.split('/')[0] || first.name || 'selected directory';
+  directoryInput.value = topLevelFolder;
+  setStatus(`Selected "${topLevelFolder}". Update to a server-visible path if needed.`, 'success');
+}
+
+function openFallbackPicker() {
+  if (!directoryPickerFallback) {
+    setStatus('Directory picking is not supported in this browser; please type a path.', 'error');
+    return;
+  }
+
+  directoryPickerFallback.value = '';
+  directoryPickerFallback.click();
+}
+
 async function tryDirectoryPicker() {
   if (!window.showDirectoryPicker) {
-    setStatus('Your browser does not support the directory picker API; please type a path.', 'error');
+    openFallbackPicker();
     return;
   }
 
@@ -37,7 +61,13 @@ async function tryDirectoryPicker() {
     directoryInput.value = name;
     setStatus(`Selected "${name}". Update to a server-visible path if needed.`, 'success');
   } catch (err) {
-    setStatus('Directory selection was cancelled.', 'warn');
+    if (err?.name === 'AbortError') {
+      setStatus('Directory selection was cancelled.', 'warn');
+      return;
+    }
+
+    console.error(err);
+    openFallbackPicker();
   }
 }
 
@@ -489,6 +519,14 @@ async function handleSubmit(event) {
     return;
   }
 
+  if (window.location.protocol === 'file:') {
+    setStatus(
+      'Scanning requires running the app from a local server (e.g., via "npm start") so it can reach the Netlify function.',
+      'error'
+    );
+    return;
+  }
+
   setStatus('Scanning projects...', 'loading');
   resetResultsUI();
   const scanId = Date.now();
@@ -529,6 +567,9 @@ async function handleSubmit(event) {
 }
 
 pickButton.addEventListener('click', tryDirectoryPicker);
+directoryPickerFallback?.addEventListener('change', () => {
+  setDirectoryFromFiles(directoryPickerFallback.files);
+});
 form.addEventListener('submit', handleSubmit);
 searchInput.addEventListener('input', applyFilters);
 technologyFilter.addEventListener('change', applyFilters);
