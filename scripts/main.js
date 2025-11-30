@@ -519,6 +519,14 @@ async function handleSubmit(event) {
     return;
   }
 
+  if (window.location.protocol === 'file:') {
+    setStatus(
+      'Scanning requires running the app from a local server (e.g., via "npm start") so it can reach the Netlify function.',
+      'error'
+    );
+    return;
+  }
+
   setStatus('Scanning projects...', 'loading');
   resetResultsUI();
   const scanId = Date.now();
