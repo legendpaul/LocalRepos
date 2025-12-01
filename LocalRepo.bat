@@ -8,7 +8,11 @@ if not exist node_modules (
 )
 
 echo Starting LocalRepos development server...
-npm start
+call npm start
+
+echo.
+echo If the server stopped unexpectedly, review the logs above.
+pause
 
 popd
 endlocal
