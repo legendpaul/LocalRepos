@@ -4,11 +4,11 @@ pushd "%~dp0"
 
 if not exist node_modules (
   echo Installing dependencies...
-  call npm install
+  npm install
 )
 
 echo Starting LocalRepos development server...
-call npm start
+npm start
 
 popd
 endlocal
