@@ -511,11 +511,20 @@ function resetResultsUI() {
   if (relationshipDetails) relationshipDetails.textContent = 'Scanning workspace...';
 }
 
+function isLikelyAbsolutePath(value) {
+  return value.startsWith('/') || /^[a-zA-Z]:\\\\/.test(value);
+}
+
 async function handleSubmit(event) {
   event.preventDefault();
   const directory = directoryInput.value.trim();
   if (!directory) {
     setStatus('Please provide a directory path.', 'error');
+    return;
+  }
+
+  if (!isLikelyAbsolutePath(directory)) {
+    setStatus('Please enter a full path that the server can access (e.g., C\\\\Repos or /var/repos).', 'warn');
     return;
   }
 
@@ -539,11 +548,13 @@ async function handleSubmit(event) {
       body: JSON.stringify({ directory }),
     });
 
+    const payload = await response.json();
+
     if (!response.ok) {
-      throw new Error(`Request failed: ${response.statusText}`);
+      const message = payload?.error || response.statusText;
+      throw new Error(`Request failed: ${message}`);
     }
 
-    const payload = await response.json();
     const { projects, duplicates } = payload;
 
     if (scanId !== activeScanId) {
