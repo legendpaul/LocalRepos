@@ -269,13 +269,20 @@ async function inspectProject(projectPath) {
 }
 
 async function findProjects(rootDir) {
-  const entries = fs.readdirSync(rootDir, { withFileTypes: true });
   const projects = [];
+  const stack = [rootDir];
 
-  for (const entry of entries) {
-    if (!entry.isDirectory()) continue;
-    const projectPath = path.join(rootDir, entry.name);
-    projects.push(await inspectProject(projectPath));
+  while (stack.length) {
+    const current = stack.pop();
+    const entries = fs.readdirSync(current, { withFileTypes: true });
+
+    for (const entry of entries) {
+      if (!entry.isDirectory() || IGNORED_DIRS.has(entry.name)) continue;
+
+      const projectPath = path.join(current, entry.name);
+      projects.push(await inspectProject(projectPath));
+      stack.push(projectPath);
+    }
   }
 
   return projects;
