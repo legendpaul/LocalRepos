@@ -241,6 +241,7 @@ async function inspectProject(projectPath, ignoredDirs) {
   const methods = [];
   const technologies = new Set();
   const referenceMentions = new Set();
+  const name = getProjectName(projectPath);
 
   for (const filePath of filePaths) {
     try {
@@ -275,7 +276,7 @@ async function inspectProject(projectPath, ignoredDirs) {
   collectTechFromPackageJson(projectPath, technologies);
   const hasUncommitted = await gitHasUncommitted(projectPath);
   return {
-    name: path.basename(projectPath),
+    name,
     path: projectPath,
     files,
     variables,
@@ -287,6 +288,20 @@ async function inspectProject(projectPath, ignoredDirs) {
     referenceMentions: [...referenceMentions],
     references: [],
   };
+}
+
+function getProjectName(projectPath) {
+  const normalizedPath = path.normalize(projectPath);
+  const netlifyFunctionsSegment = `${path.sep}netlify${path.sep}functions`;
+  const netlifyIndex = normalizedPath.toLowerCase().indexOf(netlifyFunctionsSegment);
+
+  if (netlifyIndex !== -1) {
+    const rootPath = normalizedPath.slice(0, netlifyIndex) || normalizedPath;
+    const parentName = path.basename(rootPath);
+    if (parentName) return parentName;
+  }
+
+  return path.basename(projectPath);
 }
 
 async function findProjects(rootDir, ignoredDirs) {
