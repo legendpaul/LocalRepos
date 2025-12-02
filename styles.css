@@ -240,6 +240,10 @@ button.ghost {
   gap: 16px;
 }
 
+.card {
+  min-width: 0;
+}
+
 .filters {
   display: grid;
   gap: 8px;
@@ -448,6 +452,8 @@ button.ghost {
   border: 1px dashed var(--border);
   border-radius: 10px;
   padding: 8px 10px;
+  gap: 10px;
+  min-width: 0;
 }
 
 .meta-label {
@@ -486,10 +492,12 @@ button.ghost {
   border: 1px solid var(--border);
   border-radius: 12px;
   background: #0b1222;
+  min-width: 0;
 }
 
 .list__title {
   margin: 0 0 6px;
+  overflow-wrap: anywhere;
 }
 
 .small {
@@ -503,6 +511,7 @@ button.ghost {
   border-radius: 6px;
   padding: 2px 6px;
   font-size: 12px;
+  overflow-wrap: anywhere;
 }
 
 .inline {
