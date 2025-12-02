@@ -15,6 +15,7 @@ const execAsync = (command, options = {}) =>
   });
 
 const DEFAULT_IGNORED_DIRS = ['node_modules', '.git', '.cache', 'dist', 'build', 'library', 'packagecache'];
+const IGNORED_FILES = new Set(['.gitignore']);
 const BINARY_EXTENSIONS = new Set([
   '.png',
   '.jpg',
@@ -245,6 +246,11 @@ async function inspectProject(projectPath, ignoredDirs) {
 
   for (const filePath of filePaths) {
     try {
+      const fileName = path.basename(filePath).toLowerCase();
+      if (IGNORED_FILES.has(fileName)) {
+        continue;
+      }
+
       collectTechFromFile(filePath, technologies);
       const stats = fs.statSync(filePath);
       if (stats.size > MAX_SCAN_FILE_SIZE) {
