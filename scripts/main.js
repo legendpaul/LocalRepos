@@ -20,9 +20,12 @@ let duplicatesData = [];
 let relationshipEdges = [];
 let activeScanId = 0;
 let hiddenProjects = new Set();
+let currentScanRoot = '';
 
 const formatCount = (label, count) => `${count} ${label}${count === 1 ? '' : 's'}`;
 const projectAnchorId = (name) => `project-${name.replace(/[^a-z0-9]+/gi, '-').toLowerCase()}`;
+const toForwardSlashes = (value = '') => String(value || '').replace(/\\/g, '/');
+const normalizeGroupPath = (value = '') => toForwardSlashes(value).replace(/\/+$/, '');
 
 function setStatus(message, mode = 'idle') {
   statusEl.textContent = message;
@@ -215,6 +218,41 @@ function renderProject(project) {
   return card;
 }
 
+function getGroupLabel(projectPath) {
+  const normalizedRoot = normalizeGroupPath(currentScanRoot);
+  const normalizedProject = normalizeGroupPath(projectPath);
+  const lowerRoot = normalizedRoot.toLowerCase();
+  const lowerProject = normalizedProject.toLowerCase();
+
+  if (normalizedRoot && lowerProject.startsWith(lowerRoot)) {
+    const remainder = normalizedProject.slice(normalizedRoot.length).replace(/^\/+/, '');
+    const [firstSegment] = remainder.split('/').filter(Boolean);
+    return firstSegment ? `${normalizedRoot}/${firstSegment}` : normalizedRoot;
+  }
+
+  const lastSlash = normalizedProject.lastIndexOf('/');
+  return lastSlash > 0 ? normalizedProject.slice(0, lastSlash) : normalizedProject || 'Projects';
+}
+
+function groupProjectsByDirectory(projects) {
+  const grouped = new Map();
+
+  projects.forEach((project) => {
+    const label = getGroupLabel(project.path);
+    if (!grouped.has(label)) {
+      grouped.set(label, []);
+    }
+    grouped.get(label).push(project);
+  });
+
+  return [...grouped.entries()]
+    .sort((a, b) => a[0].localeCompare(b[0], undefined, { sensitivity: 'base' }))
+    .map(([label, projectList]) => ({
+      label,
+      projects: projectList.sort((a, b) => a.path.localeCompare(b.path, undefined, { sensitivity: 'base' })),
+    }));
+}
+
 function renderProjects(projects) {
   resultsGrid.innerHTML = '';
 
@@ -227,7 +265,35 @@ function renderProjects(projects) {
   }
 
   const fragment = document.createDocumentFragment();
-  projects.forEach((project) => fragment.appendChild(renderProject(project)));
+  const groupedProjects = groupProjectsByDirectory(projects);
+
+  groupedProjects.forEach((group) => {
+    const wrapper = document.createElement('div');
+    wrapper.className = 'results-group';
+
+    const header = document.createElement('div');
+    header.className = 'results-group__header';
+
+    const eyebrow = document.createElement('p');
+    eyebrow.className = 'eyebrow results-group__eyebrow';
+    eyebrow.textContent = 'Directory';
+    header.appendChild(eyebrow);
+
+    const title = document.createElement('p');
+    title.className = 'results-group__title';
+    title.textContent = group.label;
+    header.appendChild(title);
+
+    wrapper.appendChild(header);
+
+    const cardGrid = document.createElement('div');
+    cardGrid.className = 'results-group__cards';
+    group.projects.forEach((project) => cardGrid.appendChild(renderProject(project)));
+
+    wrapper.appendChild(cardGrid);
+    fragment.appendChild(wrapper);
+  });
+
   resultsGrid.appendChild(fragment);
 }
 
@@ -614,6 +680,7 @@ async function handleSubmit(event) {
     return;
   }
 
+  currentScanRoot = normalizeGroupPath(rawDirectory);
   const directory = normalizeDirectorySeparators(rawDirectory);
 
   if (!isLikelyAbsolutePath(directory)) {

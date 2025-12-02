@@ -206,9 +206,38 @@ button.ghost {
 
 .grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  grid-template-columns: 1fr;
   gap: 16px;
   margin-top: 20px;
+}
+
+.results-group {
+  grid-column: 1 / -1;
+  display: grid;
+  gap: 10px;
+}
+
+.results-group__header {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  justify-content: space-between;
+}
+
+.results-group__eyebrow {
+  margin: 0;
+}
+
+.results-group__title {
+  margin: 0;
+  font-weight: 700;
+  color: #f8fafc;
+}
+
+.results-group__cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 16px;
 }
 
 .filters {
