@@ -512,19 +512,30 @@ function resetResultsUI() {
 }
 
 function isLikelyAbsolutePath(value) {
-  return value.startsWith('/') || /^[a-zA-Z]:\\\\/.test(value);
+  return value.startsWith('/') || /^[a-zA-Z]:(\\\\|\\)/.test(value);
+}
+
+function normalizeDirectorySeparators(value) {
+  if (!/^[a-zA-Z]:/.test(value)) {
+    return value;
+  }
+
+  const collapsed = value.replace(/\\+/g, '\\');
+  return collapsed.replace(/\\/g, '\\\\');
 }
 
 async function handleSubmit(event) {
   event.preventDefault();
-  const directory = directoryInput.value.trim();
-  if (!directory) {
+  const rawDirectory = directoryInput.value.trim();
+  if (!rawDirectory) {
     setStatus('Please provide a directory path.', 'error');
     return;
   }
 
+  const directory = normalizeDirectorySeparators(rawDirectory);
+
   if (!isLikelyAbsolutePath(directory)) {
-    setStatus('Please enter a full path that the server can access (e.g., C\\\\Repos or /var/repos).', 'warn');
+    setStatus('Please enter a full path that the server can access (e.g., C\\Repos or /var/repos).', 'warn');
     return;
   }
 
