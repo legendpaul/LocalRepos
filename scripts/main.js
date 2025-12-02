@@ -9,7 +9,6 @@ const directoryPickerFallback = document.getElementById('directory-picker-input'
 const filtersSection = document.getElementById('filters');
 const searchInput = document.getElementById('search');
 const includeTechnologyFilter = document.getElementById('include-technology-filter');
-const excludeTechnologyFilter = document.getElementById('exclude-technology-filter');
 const relationshipsSection = document.getElementById('relationships');
 const relationshipSvg = document.getElementById('relationship-graph');
 const relationshipDetails = document.getElementById('relationship-details');
@@ -220,39 +219,59 @@ function populateTechnologyFilters(projects) {
   const techSet = new Set();
   projects.forEach((project) => project.technologies?.forEach((tech) => techSet.add(tech)));
 
-  const selects = [includeTechnologyFilter, excludeTechnologyFilter];
-  selects.forEach((select) => {
-    if (!select) return;
-    const previousSelection = new Set(Array.from(select.selectedOptions || []).map((opt) => opt.value));
-    select.innerHTML = '';
+  if (!includeTechnologyFilter) return;
 
-    [...techSet].sort().forEach((tech) => {
-      const option = document.createElement('option');
-      option.value = tech;
-      option.textContent = tech;
-      option.selected = previousSelection.has(tech);
-      select.appendChild(option);
-    });
+  const previousSelection = new Set(
+    Array.from(includeTechnologyFilter.querySelectorAll('input[name="include-technology"]'))
+      .filter((input) => input.checked)
+      .map((input) => input.value)
+  );
+
+  includeTechnologyFilter.innerHTML = '';
+
+  const technologies = [...techSet].sort();
+  const defaultToAll = previousSelection.size === 0;
+
+  technologies.forEach((tech) => {
+    const label = document.createElement('label');
+    label.className = 'pill-checkbox';
+
+    const input = document.createElement('input');
+    input.type = 'checkbox';
+    input.name = 'include-technology';
+    input.value = tech;
+    input.checked = defaultToAll ? true : previousSelection.has(tech);
+
+    const text = document.createElement('span');
+    text.textContent = tech;
+
+    label.appendChild(input);
+    label.appendChild(text);
+    includeTechnologyFilter.appendChild(label);
   });
+
+  if (!technologies.length) {
+    const empty = document.createElement('p');
+    empty.className = 'small';
+    empty.textContent = 'No technologies detected yet.';
+    includeTechnologyFilter.appendChild(empty);
+  }
 }
 
 function applyFilters() {
   const term = searchInput.value.trim().toLowerCase();
 
-  const getSelectedTechnologies = (selectEl) =>
-    Array.from(selectEl?.selectedOptions || [])
-      .map((opt) => opt.value)
-      .filter(Boolean);
-
-  const includedTech = getSelectedTechnologies(includeTechnologyFilter);
-  const excludedTech = getSelectedTechnologies(excludeTechnologyFilter);
+  const technologyInputs = Array.from(
+    includeTechnologyFilter?.querySelectorAll('input[name="include-technology"]') || []
+  );
+  const includedTech = technologyInputs.filter((input) => input.checked).map((input) => input.value);
+  const includeFilterActive = includedTech.length > 0 && includedTech.length !== technologyInputs.length;
 
   const filtered = allProjects.filter((project) => {
     const technologies = project.technologies || [];
-    const matchesIncluded = includedTech.length
-      ? includedTech.every((tech) => technologies.includes(tech))
+    const matchesIncluded = includeFilterActive
+      ? technologies.some((tech) => includedTech.includes(tech))
       : true;
-    const matchesExcluded = excludedTech.length ? !excludedTech.some((tech) => technologies.includes(tech)) : true;
     const termTargets = [
       project.name,
       project.path,
@@ -269,7 +288,7 @@ function applyFilters() {
 
     const tokens = term.split(/\s+/).filter(Boolean);
     const matchesTerm = tokens.length ? tokens.every((token) => termTargets.includes(token)) : true;
-    return matchesIncluded && matchesExcluded && matchesTerm;
+    return matchesIncluded && matchesTerm;
   });
 
   renderProjects(filtered);
@@ -632,7 +651,6 @@ directoryPickerFallback?.addEventListener('change', () => {
 form.addEventListener('submit', handleSubmit);
 searchInput.addEventListener('input', applyFilters);
 includeTechnologyFilter?.addEventListener('change', applyFilters);
-excludeTechnologyFilter?.addEventListener('change', applyFilters);
 relationshipSvg?.addEventListener('click', (event) => {
   const nodeEl = event.target.closest('[data-node]');
   if (nodeEl) {
