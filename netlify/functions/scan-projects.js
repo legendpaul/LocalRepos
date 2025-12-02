@@ -20,6 +20,7 @@ const IGNORED_FILES = new Set([
   '.gitattributes',
   'edge-functions-import-map.json',
   'netlify.toml',
+  'debug-env.js',
 ]);
 const BINARY_EXTENSIONS = new Set([
   '.png',
