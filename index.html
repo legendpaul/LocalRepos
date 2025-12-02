@@ -89,10 +89,22 @@
       <div class="filters">
         <label class="form__label" for="search">Search</label>
         <input id="search" name="search" type="search" placeholder="Search projects or technologies" />
-        <label class="form__label" for="technology-filter">Technology</label>
-        <select id="technology-filter" name="technology-filter">
-          <option value="">All technologies</option>
-        </select>
+        <div class="filters__row">
+          <div class="filters__group">
+            <div class="filters__group-header">
+              <label class="form__label" for="include-technology-filter">Include technologies</label>
+              <p class="small">Projects must include every selected technology.</p>
+            </div>
+            <select id="include-technology-filter" name="include-technology-filter" multiple size="6"></select>
+          </div>
+          <div class="filters__group">
+            <div class="filters__group-header">
+              <label class="form__label" for="exclude-technology-filter">Hide technologies</label>
+              <p class="small">Projects using any selected technology will be hidden.</p>
+            </div>
+            <select id="exclude-technology-filter" name="exclude-technology-filter" multiple size="6"></select>
+          </div>
+        </div>
       </div>
     </section>
 
