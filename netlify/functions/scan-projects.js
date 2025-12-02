@@ -316,6 +316,15 @@ function getProjectName(projectPath) {
   return path.basename(projectPath);
 }
 
+function isNetlifyFunctionsPath(projectPath) {
+  const normalized = projectPath.split(path.sep).map((segment) => segment.toLowerCase());
+  const netlifyIndex = normalized.indexOf('netlify');
+
+  if (netlifyIndex === -1) return false;
+
+  return normalized[netlifyIndex + 1] === 'functions';
+}
+
 async function findProjects(rootDir, ignoredDirs) {
   const projects = [];
   const stack = [rootDir];
@@ -328,7 +337,7 @@ async function findProjects(rootDir, ignoredDirs) {
       if (!entry.isDirectory() || ignoredDirs.has(entry.name.toLowerCase())) continue;
 
       const projectPath = path.join(current, entry.name);
-      if (isProjectDirectory(projectPath)) {
+      if (isProjectDirectory(projectPath) && !isNetlifyFunctionsPath(projectPath)) {
         projects.push(await inspectProject(projectPath, ignoredDirs));
       }
       stack.push(projectPath);
