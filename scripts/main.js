@@ -270,7 +270,7 @@ function applyFilters() {
   const filtered = allProjects.filter((project) => {
     const technologies = project.technologies || [];
     const matchesIncluded = includeFilterActive
-      ? includedTech.every((tech) => technologies.includes(tech))
+      ? technologies.some((tech) => includedTech.includes(tech))
       : true;
     const termTargets = [
       project.name,
