@@ -39,6 +39,14 @@ const BINARY_EXTENSIONS = new Set([
   '.avi',
 ]);
 const MAX_SCAN_FILE_SIZE = 1_500_000; // ~1.5 MB safeguard against binary/huge files
+const PROJECT_MARKERS = [
+  'package.json',
+  'requirements.txt',
+  'pyproject.toml',
+  'Gemfile',
+  'composer.json',
+  '.git',
+];
 const EXTENSION_TECH = {
   '.js': 'JavaScript',
   '.mjs': 'JavaScript',
@@ -169,6 +177,10 @@ function collectTechFromPackageJson(projectPath, techSet) {
   }
 }
 
+function isProjectDirectory(directoryPath) {
+  return PROJECT_MARKERS.some((marker) => fs.existsSync(path.join(directoryPath, marker)));
+}
+
 function extractReferenceTargets(content) {
   const targets = new Set();
   const importPattern = /import[^'"`]*['"`]([^'"`]+)['"`]/g;
@@ -280,7 +292,9 @@ async function findProjects(rootDir) {
       if (!entry.isDirectory() || IGNORED_DIRS.has(entry.name)) continue;
 
       const projectPath = path.join(current, entry.name);
-      projects.push(await inspectProject(projectPath));
+      if (isProjectDirectory(projectPath)) {
+        projects.push(await inspectProject(projectPath));
+      }
       stack.push(projectPath);
     }
   }
