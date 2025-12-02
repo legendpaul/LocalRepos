@@ -15,7 +15,12 @@ const execAsync = (command, options = {}) =>
   });
 
 const DEFAULT_IGNORED_DIRS = ['node_modules', '.git', '.cache', 'dist', 'build', 'library', 'packagecache'];
-const IGNORED_FILES = new Set(['.gitignore']);
+const IGNORED_FILES = new Set([
+  '.gitignore',
+  '.gitattributes',
+  'edge-functions-import-map.json',
+  'netlify.toml',
+]);
 const BINARY_EXTENSIONS = new Set([
   '.png',
   '.jpg',
