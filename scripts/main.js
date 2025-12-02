@@ -19,6 +19,7 @@ let allProjects = [];
 let duplicatesData = [];
 let relationshipEdges = [];
 let activeScanId = 0;
+let hiddenProjects = new Set();
 
 const formatCount = (label, count) => `${count} ${label}${count === 1 ? '' : 's'}`;
 const projectAnchorId = (name) => `project-${name.replace(/[^a-z0-9]+/gi, '-').toLowerCase()}`;
@@ -78,6 +79,9 @@ function renderProject(project) {
   card.className = 'card';
   card.id = projectAnchorId(project.name);
 
+  const header = document.createElement('div');
+  header.className = 'card__header';
+
   const title = document.createElement('h3');
   title.className = 'card__title';
   title.textContent = project.name;
@@ -85,7 +89,19 @@ function renderProject(project) {
   filePill.className = 'pill';
   filePill.textContent = `${project.files.length} files`;
   title.appendChild(filePill);
-  card.appendChild(title);
+  header.appendChild(title);
+
+  const hideButton = document.createElement('button');
+  hideButton.type = 'button';
+  hideButton.className = 'ghost card__action';
+  hideButton.textContent = 'Hide';
+  hideButton.addEventListener('click', () => {
+    hiddenProjects.add(project.name);
+    applyFilters();
+  });
+
+  header.appendChild(hideButton);
+  card.appendChild(header);
 
   const gitPill = document.createElement('span');
   gitPill.className = `pill ${project.hasUncommitted ? 'pill--warn' : 'pill--success'}`;
@@ -267,32 +283,35 @@ function applyFilters() {
   const includedTech = technologyInputs.filter((input) => input.checked).map((input) => input.value);
   const includeFilterActive = includedTech.length > 0 && includedTech.length !== technologyInputs.length;
 
-  const filtered = allProjects.filter((project) => {
-    const technologies = project.technologies || [];
-    const matchesIncluded = includeFilterActive
-      ? technologies.some((tech) => includedTech.includes(tech))
-      : true;
-    const termTargets = [
-      project.name,
-      project.path,
-      project.technologies?.join(' '),
-      String(project.files.length),
-      String(project.variables.length),
-      String(project.functions?.length ?? 0),
-      String(project.methods.length),
-      String(project.classes.length),
-    ]
-      .filter(Boolean)
-      .join(' ')
-      .toLowerCase();
+  const filtered = allProjects
+    .filter((project) => {
+      const technologies = project.technologies || [];
+      const matchesIncluded = includeFilterActive
+        ? technologies.some((tech) => includedTech.includes(tech))
+        : true;
+      const termTargets = [
+        project.name,
+        project.path,
+        project.technologies?.join(' '),
+        String(project.files.length),
+        String(project.variables.length),
+        String(project.functions?.length ?? 0),
+        String(project.methods.length),
+        String(project.classes.length),
+      ]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase();
 
-    const tokens = term.split(/\s+/).filter(Boolean);
-    const matchesTerm = tokens.length ? tokens.every((token) => termTargets.includes(token)) : true;
-    return matchesIncluded && matchesTerm;
-  });
+      const tokens = term.split(/\s+/).filter(Boolean);
+      const matchesTerm = tokens.length ? tokens.every((token) => termTargets.includes(token)) : true;
+      return matchesIncluded && matchesTerm;
+    })
+    .filter((project) => !hiddenProjects.has(project.name));
 
   renderProjects(filtered);
   renderRelationships(filtered);
+  renderDuplicates(getVisibleDuplicates(filtered));
 }
 
 function renderDuplicates(duplicates) {
@@ -317,6 +336,11 @@ function renderDuplicates(duplicates) {
   });
 
   duplicateList.appendChild(fragment);
+}
+
+function getVisibleDuplicates(projects) {
+  const names = new Set(projects.map((project) => project.name));
+  return duplicatesData.filter((entry) => entry.projects.every((name) => names.has(name)));
 }
 
 function buildRelationshipEdges(projects, duplicates) {
@@ -549,6 +573,10 @@ function resetResultsUI() {
   if (relationshipDetails) relationshipDetails.textContent = 'Scanning workspace...';
 }
 
+function resetHiddenProjects() {
+  hiddenProjects = new Set();
+}
+
 function isLikelyAbsolutePath(value) {
   return value.startsWith('/') || /^[a-zA-Z]:(\\\\|\\)/.test(value);
 }
@@ -603,6 +631,7 @@ async function handleSubmit(event) {
 
   setStatus('Scanning projects...', 'loading');
   resetResultsUI();
+  resetHiddenProjects();
   const scanId = Date.now();
   activeScanId = scanId;
 
@@ -634,9 +663,7 @@ async function handleSubmit(event) {
     populateTechnologyFilters(projects);
     filtersSection.hidden = projects.length === 0;
 
-    renderProjects(projects);
-    renderDuplicates(duplicates);
-    renderRelationships(projects);
+    applyFilters();
     setStatus(`Scanned ${projects.length} project${projects.length === 1 ? '' : 's'}.`, 'success');
   } catch (error) {
     console.error(error);
@@ -649,7 +676,10 @@ directoryPickerFallback?.addEventListener('change', () => {
   setDirectoryFromFiles(directoryPickerFallback.files);
 });
 form.addEventListener('submit', handleSubmit);
-searchInput.addEventListener('input', applyFilters);
+searchInput.addEventListener('input', () => {
+  resetHiddenProjects();
+  applyFilters();
+});
 includeTechnologyFilter?.addEventListener('change', applyFilters);
 relationshipSvg?.addEventListener('click', (event) => {
   const nodeEl = event.target.closest('[data-node]');
