@@ -14,7 +14,7 @@ const execAsync = (command, options = {}) =>
     });
   });
 
-const IGNORED_DIRS = new Set(['node_modules', '.git', '.cache', 'dist', 'build']);
+const DEFAULT_IGNORED_DIRS = ['node_modules', '.git', '.cache', 'dist', 'build', 'library', 'packagecache'];
 const BINARY_EXTENSIONS = new Set([
   '.png',
   '.jpg',
@@ -199,7 +199,16 @@ function extractReferenceTargets(content) {
   return [...targets];
 }
 
-async function walkFiles(baseDir) {
+function buildIgnoredSet(extraIgnores = []) {
+  const set = new Set(DEFAULT_IGNORED_DIRS.map((name) => name.toLowerCase()));
+  extraIgnores
+    .map((name) => String(name || '').trim().toLowerCase())
+    .filter(Boolean)
+    .forEach((name) => set.add(name));
+  return set;
+}
+
+async function walkFiles(baseDir, ignoredDirs) {
   const files = [];
   const stack = [baseDir];
 
@@ -207,7 +216,7 @@ async function walkFiles(baseDir) {
     const current = stack.pop();
     const entries = fs.readdirSync(current, { withFileTypes: true });
     entries.forEach((entry) => {
-      if (IGNORED_DIRS.has(entry.name)) {
+      if (ignoredDirs.has(entry.name.toLowerCase())) {
         return;
       }
 
@@ -223,8 +232,8 @@ async function walkFiles(baseDir) {
   return files;
 }
 
-async function inspectProject(projectPath) {
-  const filePaths = await walkFiles(projectPath);
+async function inspectProject(projectPath, ignoredDirs) {
+  const filePaths = await walkFiles(projectPath, ignoredDirs);
   const files = [];
   const variables = [];
   const functions = [];
@@ -280,7 +289,7 @@ async function inspectProject(projectPath) {
   };
 }
 
-async function findProjects(rootDir) {
+async function findProjects(rootDir, ignoredDirs) {
   const projects = [];
   const stack = [rootDir];
 
@@ -289,11 +298,11 @@ async function findProjects(rootDir) {
     const entries = fs.readdirSync(current, { withFileTypes: true });
 
     for (const entry of entries) {
-      if (!entry.isDirectory() || IGNORED_DIRS.has(entry.name)) continue;
+      if (!entry.isDirectory() || ignoredDirs.has(entry.name.toLowerCase())) continue;
 
       const projectPath = path.join(current, entry.name);
       if (isProjectDirectory(projectPath)) {
-        projects.push(await inspectProject(projectPath));
+        projects.push(await inspectProject(projectPath, ignoredDirs));
       }
       stack.push(projectPath);
     }
@@ -367,7 +376,7 @@ exports.handler = async function handler(event) {
   }
 
   try {
-    const { directory } = JSON.parse(event.body || '{}');
+    const { directory, excludeFolders } = JSON.parse(event.body || '{}');
     if (!directory) {
       return { statusCode: 400, body: JSON.stringify({ error: 'Directory is required' }) };
     }
@@ -376,7 +385,8 @@ exports.handler = async function handler(event) {
       return { statusCode: 400, body: JSON.stringify({ error: 'Directory not found' }) };
     }
 
-    const projects = await findProjects(directory);
+    const ignoredDirs = buildIgnoredSet(Array.isArray(excludeFolders) ? excludeFolders : []);
+    const projects = await findProjects(directory, ignoredDirs);
     applyReferences(projects);
     const duplicates = await buildDuplicateMatrix(projects);
 

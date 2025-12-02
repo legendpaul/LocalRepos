@@ -37,7 +37,43 @@
           <button type="button" id="pick-directory" class="ghost">Use picker</button>
           <button type="submit" class="primary">Scan</button>
         </div>
-        <p class="form__footnote">The optional picker uses the browser's directory access to prefill the path when supported.</p>
+        <p class="form__footnote">
+          The optional picker uses the browser's directory access to prefill the path when supported.
+        </p>
+
+        <div class="form__controls form__controls--stacked" aria-label="Folder exclusions">
+          <p class="form__label">Skip library folders</p>
+          <div class="pill-checkboxes" id="exclude-folders">
+            <label class="pill-checkbox">
+              <input type="checkbox" name="exclude-folder" value="Library" checked />
+              <span>Unity Library</span>
+            </label>
+            <label class="pill-checkbox">
+              <input type="checkbox" name="exclude-folder" value="PackageCache" checked />
+              <span>Unity PackageCache</span>
+            </label>
+            <label class="pill-checkbox">
+              <input type="checkbox" name="exclude-folder" value="packages" />
+              <span>Packages</span>
+            </label>
+            <label class="pill-checkbox">
+              <input type="checkbox" name="exclude-folder" value="vendor" />
+              <span>Vendor</span>
+            </label>
+            <label class="pill-checkbox">
+              <input type="checkbox" name="exclude-folder" value="Pods" />
+              <span>CocoaPods</span>
+            </label>
+          </div>
+          <label class="form__label" for="exclude-custom">Custom folder names to ignore</label>
+          <input
+            id="exclude-custom"
+            name="exclude-custom"
+            type="text"
+            placeholder="Enter folder names, comma separated (e.g., .nuget, temp, cache)"
+          />
+          <p class="form__footnote">Ignored names are matched anywhere in the path so cached dependencies stay out of the scan.</p>
+        </div>
       </form>
       <div id="status" class="status status--idle">Waiting to scan...</div>
     </section>
