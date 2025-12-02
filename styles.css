@@ -107,6 +107,11 @@ h2 {
   gap: 8px;
 }
 
+.form__controls--stacked {
+  grid-template-columns: 1fr;
+  align-items: center;
+}
+
 input[type="search"],
 select,
 input[type="text"] {
@@ -145,6 +150,33 @@ button.ghost {
   background: transparent;
   border: 1px solid var(--border);
   color: var(--text);
+}
+
+.pill-checkboxes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.pill-checkbox {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: #0b1222;
+  color: var(--text);
+  font-weight: 600;
+}
+
+.pill-checkbox input {
+  accent-color: var(--accent);
+}
+
+.form__footnote {
+  color: var(--muted);
+  margin: 0;
 }
 
 .status {

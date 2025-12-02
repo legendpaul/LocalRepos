@@ -12,6 +12,8 @@ const technologyFilter = document.getElementById('technology-filter');
 const relationshipsSection = document.getElementById('relationships');
 const relationshipSvg = document.getElementById('relationship-graph');
 const relationshipDetails = document.getElementById('relationship-details');
+const excludeFolderContainer = document.getElementById('exclude-folders');
+const excludeCustomInput = document.getElementById('exclude-custom');
 
 let allProjects = [];
 let duplicatesData = [];
@@ -524,6 +526,22 @@ function normalizeDirectorySeparators(value) {
   return collapsed.replace(/\\/g, '\\\\');
 }
 
+function getExcludedFolders() {
+  const checkboxValues = Array.from(
+    excludeFolderContainer?.querySelectorAll('input[name="exclude-folder"]') || []
+  )
+    .filter((input) => input.checked)
+    .map((input) => input.value.trim())
+    .filter(Boolean);
+
+  const customValues = (excludeCustomInput?.value || '')
+    .split(',')
+    .map((value) => value.trim())
+    .filter(Boolean);
+
+  return [...new Set([...checkboxValues, ...customValues])];
+}
+
 async function handleSubmit(event) {
   event.preventDefault();
   const rawDirectory = directoryInput.value.trim();
@@ -552,11 +570,13 @@ async function handleSubmit(event) {
   const scanId = Date.now();
   activeScanId = scanId;
 
+  const excludeFolders = getExcludedFolders();
+
   try {
     const response = await fetch('/.netlify/functions/scan-projects', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ directory }),
+      body: JSON.stringify({ directory, excludeFolders }),
     });
 
     const payload = await response.json();
