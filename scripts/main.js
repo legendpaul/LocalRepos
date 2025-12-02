@@ -8,7 +8,8 @@ const pickButton = document.getElementById('pick-directory');
 const directoryPickerFallback = document.getElementById('directory-picker-input');
 const filtersSection = document.getElementById('filters');
 const searchInput = document.getElementById('search');
-const technologyFilter = document.getElementById('technology-filter');
+const includeTechnologyFilter = document.getElementById('include-technology-filter');
+const excludeTechnologyFilter = document.getElementById('exclude-technology-filter');
 const relationshipsSection = document.getElementById('relationships');
 const relationshipSvg = document.getElementById('relationship-graph');
 const relationshipDetails = document.getElementById('relationship-details');
@@ -215,27 +216,43 @@ function renderProjects(projects) {
   resultsGrid.appendChild(fragment);
 }
 
-function populateTechnologyFilter(projects) {
+function populateTechnologyFilters(projects) {
   const techSet = new Set();
   projects.forEach((project) => project.technologies?.forEach((tech) => techSet.add(tech)));
 
-  const existingOptions = Array.from(technologyFilter.options).slice(1);
-  existingOptions.forEach((opt) => opt.remove());
+  const selects = [includeTechnologyFilter, excludeTechnologyFilter];
+  selects.forEach((select) => {
+    if (!select) return;
+    const previousSelection = new Set(Array.from(select.selectedOptions || []).map((opt) => opt.value));
+    select.innerHTML = '';
 
-  [...techSet].sort().forEach((tech) => {
-    const option = document.createElement('option');
-    option.value = tech;
-    option.textContent = tech;
-    technologyFilter.appendChild(option);
+    [...techSet].sort().forEach((tech) => {
+      const option = document.createElement('option');
+      option.value = tech;
+      option.textContent = tech;
+      option.selected = previousSelection.has(tech);
+      select.appendChild(option);
+    });
   });
 }
 
 function applyFilters() {
   const term = searchInput.value.trim().toLowerCase();
-  const tech = technologyFilter.value;
+
+  const getSelectedTechnologies = (selectEl) =>
+    Array.from(selectEl?.selectedOptions || [])
+      .map((opt) => opt.value)
+      .filter(Boolean);
+
+  const includedTech = getSelectedTechnologies(includeTechnologyFilter);
+  const excludedTech = getSelectedTechnologies(excludeTechnologyFilter);
 
   const filtered = allProjects.filter((project) => {
-    const matchesTech = tech ? project.technologies?.includes(tech) : true;
+    const technologies = project.technologies || [];
+    const matchesIncluded = includedTech.length
+      ? includedTech.every((tech) => technologies.includes(tech))
+      : true;
+    const matchesExcluded = excludedTech.length ? !excludedTech.some((tech) => technologies.includes(tech)) : true;
     const termTargets = [
       project.name,
       project.path,
@@ -252,7 +269,7 @@ function applyFilters() {
 
     const tokens = term.split(/\s+/).filter(Boolean);
     const matchesTerm = tokens.length ? tokens.every((token) => termTargets.includes(token)) : true;
-    return matchesTech && matchesTerm;
+    return matchesIncluded && matchesExcluded && matchesTerm;
   });
 
   renderProjects(filtered);
@@ -595,7 +612,7 @@ async function handleSubmit(event) {
     allProjects = projects;
     duplicatesData = duplicates;
 
-    populateTechnologyFilter(projects);
+    populateTechnologyFilters(projects);
     filtersSection.hidden = projects.length === 0;
 
     renderProjects(projects);
@@ -614,7 +631,8 @@ directoryPickerFallback?.addEventListener('change', () => {
 });
 form.addEventListener('submit', handleSubmit);
 searchInput.addEventListener('input', applyFilters);
-technologyFilter.addEventListener('change', applyFilters);
+includeTechnologyFilter?.addEventListener('change', applyFilters);
+excludeTechnologyFilter?.addEventListener('change', applyFilters);
 relationshipSvg?.addEventListener('click', (event) => {
   const nodeEl = event.target.closest('[data-node]');
   if (nodeEl) {

@@ -216,6 +216,34 @@ button.ghost {
   gap: 8px;
 }
 
+.filters__row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 12px;
+  align-items: start;
+}
+
+.filters__group {
+  display: grid;
+  gap: 6px;
+  background: #0b1222;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 10px;
+}
+
+.filters__group select[multiple] {
+  width: 100%;
+  min-height: 200px;
+}
+
+.filters__group-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 10px;
+}
+
 .relationships {
   display: grid;
   grid-template-columns: minmax(360px, 2fr) 320px;
