@@ -8,11 +8,8 @@ if not exist node_modules (
 )
 
 echo Starting LocalRepos development server...
-call npm start
-
-echo.
-echo If the server stopped unexpectedly, review the logs above.
-pause
+echo This window will remain open after startup. Use Ctrl+C to stop the server when you're finished.
+cmd /k "npm start"
 
 popd
 endlocal
