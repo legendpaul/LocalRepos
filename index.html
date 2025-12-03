@@ -110,6 +110,14 @@
       </div>
       <div id="duplicate-list" class="list"></div>
     </section>
+    <section class="panel" id="shared-identifiers" hidden>
+      <div class="panel__header">
+        <p class="eyebrow">Identifier overlap</p>
+        <h2>Shared classes, functions, and methods</h2>
+        <p class="hint">Hard links represent identical code bodies; soft links show matching names.</p>
+      </div>
+      <div id="shared-list" class="list"></div>
+    </section>
     <section class="panel" id="relationships" hidden>
       <div class="panel__header">
         <div>
@@ -131,6 +139,14 @@
             <div class="legend__item">
               <span class="legend__swatch legend__swatch--reference"></span>
               <span>References</span>
+            </div>
+            <div class="legend__item">
+              <span class="legend__swatch legend__swatch--shared-soft"></span>
+              <span>Shared identifiers</span>
+            </div>
+            <div class="legend__item">
+              <span class="legend__swatch legend__swatch--shared-hard"></span>
+              <span>Identical identifiers</span>
             </div>
           </div>
           <div id="relationship-details" class="relationship-details">
