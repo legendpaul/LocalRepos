@@ -238,10 +238,15 @@ button.ghost {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(20vw, 1fr));
   gap: 16px;
+  align-items: start;
 }
 
 .card {
   min-width: 0;
+}
+
+.results-group__cards > .card {
+  align-self: start;
 }
 
 .filters {
