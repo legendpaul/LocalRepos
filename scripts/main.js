@@ -4,6 +4,8 @@ const statusEl = document.getElementById('status');
 const resultsGrid = document.getElementById('results');
 const duplicatesSection = document.getElementById('duplicates');
 const duplicateList = document.getElementById('duplicate-list');
+const sharedSection = document.getElementById('shared-identifiers');
+const sharedList = document.getElementById('shared-list');
 const pickButton = document.getElementById('pick-directory');
 const directoryPickerFallback = document.getElementById('directory-picker-input');
 const filtersSection = document.getElementById('filters');
@@ -17,6 +19,7 @@ const excludeCustomInput = document.getElementById('exclude-custom');
 
 let allProjects = [];
 let duplicatesData = [];
+let sharedIdentifiersData = [];
 let relationshipEdges = [];
 let activeScanId = 0;
 let hiddenProjects = new Set();
@@ -26,6 +29,37 @@ const formatCount = (label, count) => `${count} ${label}${count === 1 ? '' : 's'
 const projectAnchorId = (name) => `project-${name.replace(/[^a-z0-9]+/gi, '-').toLowerCase()}`;
 const toForwardSlashes = (value = '') => String(value || '').replace(/\\/g, '/');
 const normalizeGroupPath = (value = '') => toForwardSlashes(value).replace(/\/+$/, '');
+const uniqueSorted = (list = []) => [...new Set(list)].sort((a, b) => a.localeCompare(b));
+
+function createIdentifierList(label, items = []) {
+  const wrapper = document.createElement('div');
+  wrapper.className = 'identifier-list';
+
+  const heading = document.createElement('p');
+  heading.className = 'eyebrow';
+  heading.textContent = label;
+  wrapper.appendChild(heading);
+
+  if (!items.length) {
+    const empty = document.createElement('p');
+    empty.className = 'small';
+    empty.textContent = 'None detected in scan.';
+    wrapper.appendChild(empty);
+    return wrapper;
+  }
+
+  const list = document.createElement('div');
+  list.className = 'tags tags--wrap';
+  uniqueSorted(items).forEach((item) => {
+    const tag = document.createElement('span');
+    tag.className = 'tag';
+    tag.textContent = item;
+    list.appendChild(tag);
+  });
+
+  wrapper.appendChild(list);
+  return wrapper;
+}
 
 function setStatus(message, mode = 'idle') {
   statusEl.textContent = message;
@@ -142,6 +176,18 @@ function renderProject(project) {
   filesTitle.className = 'eyebrow';
   filesTitle.textContent = 'Files with identifiers';
   card.appendChild(filesTitle);
+
+  const details = document.createElement('details');
+  details.className = 'card__details';
+  const summary = document.createElement('summary');
+  summary.textContent = 'Identifier breakdown';
+  details.appendChild(summary);
+
+  details.appendChild(createIdentifierList('Classes', project.classes));
+  details.appendChild(createIdentifierList('Functions', project.functions));
+  details.appendChild(createIdentifierList('Methods', project.methods));
+  details.appendChild(createIdentifierList('Variables', project.variables));
+  card.appendChild(details);
 
   if (project.technologies?.length) {
     const techLabel = document.createElement('p');
@@ -378,6 +424,7 @@ function applyFilters() {
   renderProjects(filtered);
   renderRelationships(filtered);
   renderDuplicates(getVisibleDuplicates(filtered));
+  renderSharedIdentifiers(getVisibleSharedIdentifiers(filtered));
 }
 
 function renderDuplicates(duplicates) {
@@ -409,7 +456,48 @@ function getVisibleDuplicates(projects) {
   return duplicatesData.filter((entry) => entry.projects.every((name) => names.has(name)));
 }
 
-function buildRelationshipEdges(projects, duplicates) {
+function renderSharedIdentifiers(shared) {
+  sharedList.innerHTML = '';
+  sharedSection.hidden = shared.length === 0;
+  if (!shared.length) return;
+
+  const fragment = document.createDocumentFragment();
+  shared.forEach((entry) => {
+    const item = document.createElement('div');
+    item.className = 'list__item';
+
+    const title = document.createElement('p');
+    title.className = 'list__title';
+    const strengthLabel = entry.strength === 'hard' ? 'Identical' : 'Similar';
+    title.textContent = `${entry.name} (${strengthLabel} ${entry.type})`;
+    item.appendChild(title);
+
+    const subtitle = document.createElement('p');
+    subtitle.className = 'small';
+    subtitle.textContent = `Found in: ${entry.projects.join(', ')}`;
+    item.appendChild(subtitle);
+
+    if (entry.overlaps?.length) {
+      const overlapLabel = document.createElement('p');
+      overlapLabel.className = 'small';
+      overlapLabel.textContent = `Identical code shared by: ${entry.overlaps
+        .map((group) => group.join(' & '))
+        .join(' · ')}`;
+      item.appendChild(overlapLabel);
+    }
+
+    fragment.appendChild(item);
+  });
+
+  sharedList.appendChild(fragment);
+}
+
+function getVisibleSharedIdentifiers(projects) {
+  const names = new Set(projects.map((project) => project.name));
+  return sharedIdentifiersData.filter((entry) => entry.projects.every((name) => names.has(name)));
+}
+
+function buildRelationshipEdges(projects, duplicates, sharedIdentifiers) {
   const nodeNames = new Set(projects.map((project) => project.name));
   const edgeMap = new Map();
 
@@ -440,6 +528,16 @@ function buildRelationshipEdges(projects, duplicates) {
     });
   });
 
+  sharedIdentifiers.forEach((entry) => {
+    const participants = entry.projects.filter((name) => nodeNames.has(name));
+    for (let i = 0; i < participants.length; i += 1) {
+      for (let j = i + 1; j < participants.length; j += 1) {
+        const type = entry.strength === 'hard' ? 'shared-hard' : 'shared-soft';
+        addEdge(participants[i], participants[j], type, entry.overlaps?.length || 1);
+      }
+    }
+  });
+
   return [...edgeMap.values()];
 }
 
@@ -459,7 +557,7 @@ function renderRelationships(projects) {
 
   relationshipsSection.hidden = false;
 
-  const edges = buildRelationshipEdges(projects, duplicatesData);
+  const edges = buildRelationshipEdges(projects, duplicatesData, sharedIdentifiersData);
   relationshipEdges = edges;
 
   const measuredWidth = relationshipSvg.clientWidth || relationshipSvg.parentElement?.clientWidth || 900;
@@ -484,7 +582,13 @@ function renderRelationships(projects) {
     const from = nodePositions.get(edge.source);
     const to = nodePositions.get(edge.target);
     if (!from || !to) return;
-    const color = edge.type === 'duplicate' ? '#22d3ee' : '#f59e0b';
+    const colorMap = {
+      duplicate: '#22d3ee',
+      reference: '#f59e0b',
+      'shared-soft': '#8b5cf6',
+      'shared-hard': '#a855f7',
+    };
+    const color = colorMap[edge.type] || '#94a3b8';
     const widthScale = Math.min(6, 1 + Math.log2(edge.weight + 1));
     const line = document.createElementNS(svgNS, 'line');
     line.setAttribute('x1', String(from.x));
@@ -597,9 +701,22 @@ function showRelationshipDetails(projectName) {
     tags.className = 'tags';
     connections.forEach((conn) => {
       const tag = document.createElement('span');
-      tag.className = `tag ${conn.type === 'duplicate' ? 'tag--accent' : 'tag--warn'}`;
+      const tagClassMap = {
+        duplicate: 'tag--accent',
+        reference: 'tag--warn',
+        'shared-soft': 'tag--muted',
+        'shared-hard': 'tag--accent',
+      };
+      tag.className = `tag ${tagClassMap[conn.type] || ''}`;
       const weightLabel = conn.weight > 1 ? ` (${conn.weight})` : '';
-      tag.textContent = `${conn.type === 'duplicate' ? 'Shared code' : 'Reference'} with ${conn.other}${weightLabel}`;
+      const labelMap = {
+        duplicate: 'Shared files',
+        reference: 'Reference link',
+        'shared-soft': 'Shared identifiers',
+        'shared-hard': 'Identical identifiers',
+      };
+      const label = labelMap[conn.type] || 'Link';
+      tag.textContent = `${label} with ${conn.other}${weightLabel}`;
       tags.appendChild(tag);
     });
     relationshipDetails.appendChild(tags);
@@ -634,6 +751,8 @@ function resetResultsUI() {
   resultsGrid.innerHTML = '';
   duplicateList.innerHTML = '';
   duplicatesSection.hidden = true;
+  sharedList.innerHTML = '';
+  sharedSection.hidden = true;
   relationshipsSection.hidden = true;
   if (relationshipSvg) relationshipSvg.innerHTML = '';
   if (relationshipDetails) relationshipDetails.textContent = 'Scanning workspace...';
@@ -718,7 +837,7 @@ async function handleSubmit(event) {
       throw new Error(`Request failed: ${message}`);
     }
 
-    const { projects, duplicates } = payload;
+    const { projects, duplicates, sharedIdentifiers } = payload;
 
     if (scanId !== activeScanId) {
       return;
@@ -726,6 +845,7 @@ async function handleSubmit(event) {
 
     allProjects = projects;
     duplicatesData = duplicates;
+    sharedIdentifiersData = sharedIdentifiers || [];
 
     populateTechnologyFilters(projects);
     filtersSection.hidden = projects.length === 0;

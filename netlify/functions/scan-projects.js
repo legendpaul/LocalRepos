@@ -54,6 +54,7 @@ const PROJECT_MARKERS = [
   'composer.json',
   '.git',
 ];
+const CONTAINER_ROOT_NAMES = new Set(['svn', 'bitbucket']);
 const EXTENSION_TECH = {
   '.js': 'JavaScript',
   '.mjs': 'JavaScript',
@@ -129,12 +130,62 @@ async function gitHasUncommitted(repoPath) {
   }
 }
 
+const identifierPatterns = [
+  { type: 'function', regex: /function\s+([a-zA-Z_$][\w$]*)\s*\([^)]*\)\s*{/g },
+  { type: 'method', regex: /\n\s*([a-zA-Z_$][\w$]*)\s*\([^;]*\)\s*{/g },
+  { type: 'class', regex: /class\s+([A-Za-z_$][\w$]*)\s*(?:extends\s+[A-Za-z_$][\w$]*)?\s*{/g },
+];
+
+function normalizeCode(code) {
+  return code
+    .replace(/\/\/[\s\S]*?$/gm, '')
+    .replace(/"|'/g, '"')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function extractCodeBlocks(content) {
+  const blocks = [];
+
+  identifierPatterns.forEach(({ type, regex }) => {
+    let match;
+    regex.lastIndex = 0;
+    while ((match = regex.exec(content))) {
+      const name = match[1];
+      const braceIndex = content.indexOf('{', match.index);
+      if (braceIndex === -1) continue;
+
+      let depth = 0;
+      let end = braceIndex;
+      for (let i = braceIndex; i < content.length; i += 1) {
+        const char = content[i];
+        if (char === '{') depth += 1;
+        else if (char === '}') depth -= 1;
+        if (depth === 0) {
+          end = i;
+          break;
+        }
+      }
+
+      const raw = content.slice(match.index, end + 1);
+      blocks.push({
+        name,
+        type,
+        code: normalizeCode(raw).slice(0, 10_000),
+      });
+    }
+  });
+
+  return blocks;
+}
+
 function extractIdentifiers(content) {
   const variables = [...content.matchAll(/(?:const|let|var)\s+([a-zA-Z_$][\w$]*)/g)].map((m) => m[1]);
   const functions = [...content.matchAll(/function\s+([a-zA-Z_$][\w$]*)/g)].map((m) => m[1]);
   const classes = [...content.matchAll(/class\s+([A-Za-z_$][\w$]*)/g)].map((m) => m[1]);
   const methods = [...content.matchAll(/\n\s*([a-zA-Z_$][\w$]*)\s*\([^;]*\)\s*{/g)].map((m) => m[1]);
-  return { variables, functions, classes, methods };
+  const codeBlocks = extractCodeBlocks(content);
+  return { variables, functions, classes, methods, codeBlocks };
 }
 
 async function hashFile(filePath) {
@@ -186,6 +237,13 @@ function collectTechFromPackageJson(projectPath, techSet) {
 
 function isProjectDirectory(directoryPath) {
   return PROJECT_MARKERS.some((marker) => fs.existsSync(path.join(directoryPath, marker)));
+}
+
+function isContainerDirectory(directoryPath) {
+  const name = path.basename(directoryPath).toLowerCase();
+  const parentName = path.basename(path.dirname(directoryPath)).toLowerCase();
+
+  return name === 'svn' || (parentName === 'svn' && CONTAINER_ROOT_NAMES.has(name));
 }
 
 function extractReferenceTargets(content) {
@@ -246,6 +304,7 @@ async function inspectProject(projectPath, ignoredDirs) {
   const functions = [];
   const classes = [];
   const methods = [];
+  const identifierDetails = [];
   const technologies = new Set();
   const referenceMentions = new Set();
   const name = getProjectName(projectPath);
@@ -280,6 +339,15 @@ async function inspectProject(projectPath, ignoredDirs) {
       functions.push(...identifiers.functions);
       classes.push(...identifiers.classes);
       methods.push(...identifiers.methods);
+
+      identifiers.codeBlocks.forEach((block) => {
+        identifierDetails.push({
+          name: block.name,
+          type: block.type,
+          file: relativePath,
+          codeHash: crypto.createHash('sha1').update(block.code).digest('hex'),
+        });
+      });
     } catch (err) {
       // Skip unreadable files
     }
@@ -291,10 +359,11 @@ async function inspectProject(projectPath, ignoredDirs) {
     name,
     path: projectPath,
     files,
-    variables,
-    functions,
-    classes,
-    methods,
+    variables: [...new Set(variables)],
+    functions: [...new Set(functions)],
+    classes: [...new Set(classes)],
+    methods: [...new Set(methods)],
+    identifierDetails,
     hasUncommitted,
     technologies: [...technologies].sort(),
     referenceMentions: [...referenceMentions],
@@ -337,7 +406,11 @@ async function findProjects(rootDir, ignoredDirs) {
       if (!entry.isDirectory() || ignoredDirs.has(entry.name.toLowerCase())) continue;
 
       const projectPath = path.join(current, entry.name);
-      if (isProjectDirectory(projectPath) && !isNetlifyFunctionsPath(projectPath)) {
+      if (
+        !isContainerDirectory(projectPath) &&
+        isProjectDirectory(projectPath) &&
+        !isNetlifyFunctionsPath(projectPath)
+      ) {
         projects.push(await inspectProject(projectPath, ignoredDirs));
       }
       stack.push(projectPath);
@@ -394,16 +467,63 @@ function applyReferences(projects) {
 
   projects.forEach((project) => {
     const refSet = new Set();
+    const externalSet = new Set();
     project.referenceMentions.forEach((mention) => {
+      let matched = false;
       nameMap.forEach((original, lowerName) => {
         if (project.name.toLowerCase() !== lowerName && matchesName(mention, lowerName)) {
+          matched = true;
           refSet.add(original);
         }
       });
+      if (!matched) {
+        externalSet.add(mention);
+      }
     });
     project.references = [...refSet];
+    project.externalReferences = [...externalSet];
     delete project.referenceMentions;
   });
+}
+
+function findSharedIdentifiers(projects) {
+  const map = new Map();
+
+  projects.forEach((project) => {
+    (project.identifierDetails || []).forEach((detail) => {
+      const key = `${detail.type}:${detail.name}`;
+      if (!map.has(key)) {
+        map.set(key, []);
+      }
+      map.get(key).push({ project: project.name, codeHash: detail.codeHash, file: detail.file });
+    });
+  });
+
+  const shared = [];
+  map.forEach((list, key) => {
+    const projectSet = new Set(list.map((item) => item.project));
+    if (projectSet.size <= 1) return;
+
+    const [type, name] = key.split(':');
+    const hashGroups = new Map();
+    list.forEach((item) => {
+      if (!item.codeHash) return;
+      const existing = hashGroups.get(item.codeHash) || new Set();
+      existing.add(item.project);
+      hashGroups.set(item.codeHash, existing);
+    });
+
+    const hardMatches = [...hashGroups.values()].filter((set) => set.size > 1);
+    shared.push({
+      name,
+      type,
+      projects: [...projectSet],
+      strength: hardMatches.length ? 'hard' : 'soft',
+      overlaps: hardMatches.map((set) => [...set]),
+    });
+  });
+
+  return shared.sort((a, b) => a.name.localeCompare(b.name));
 }
 
 exports.handler = async function handler(event) {
@@ -425,10 +545,11 @@ exports.handler = async function handler(event) {
     const projects = await findProjects(directory, ignoredDirs);
     applyReferences(projects);
     const duplicates = await buildDuplicateMatrix(projects);
+    const sharedIdentifiers = findSharedIdentifiers(projects);
 
     return {
       statusCode: 200,
-      body: JSON.stringify({ projects, duplicates }),
+      body: JSON.stringify({ projects, duplicates, sharedIdentifiers }),
     };
   } catch (error) {
     return {
