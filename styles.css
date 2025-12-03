@@ -238,6 +238,7 @@ button.ghost {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(20vw, 1fr));
   gap: 16px;
+  align-items: flex-start;
 }
 
 .card {
