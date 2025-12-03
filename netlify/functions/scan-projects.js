@@ -54,6 +54,7 @@ const PROJECT_MARKERS = [
   'composer.json',
   '.git',
 ];
+const CONTAINER_ROOT_NAMES = new Set(['svn', 'bitbucket']);
 const EXTENSION_TECH = {
   '.js': 'JavaScript',
   '.mjs': 'JavaScript',
@@ -238,6 +239,13 @@ function isProjectDirectory(directoryPath) {
   return PROJECT_MARKERS.some((marker) => fs.existsSync(path.join(directoryPath, marker)));
 }
 
+function isContainerDirectory(directoryPath) {
+  const name = path.basename(directoryPath).toLowerCase();
+  const parentName = path.basename(path.dirname(directoryPath)).toLowerCase();
+
+  return name === 'svn' || (parentName === 'svn' && CONTAINER_ROOT_NAMES.has(name));
+}
+
 function extractReferenceTargets(content) {
   const targets = new Set();
   const importPattern = /import[^'"`]*['"`]([^'"`]+)['"`]/g;
@@ -398,7 +406,11 @@ async function findProjects(rootDir, ignoredDirs) {
       if (!entry.isDirectory() || ignoredDirs.has(entry.name.toLowerCase())) continue;
 
       const projectPath = path.join(current, entry.name);
-      if (isProjectDirectory(projectPath) && !isNetlifyFunctionsPath(projectPath)) {
+      if (
+        !isContainerDirectory(projectPath) &&
+        isProjectDirectory(projectPath) &&
+        !isNetlifyFunctionsPath(projectPath)
+      ) {
         projects.push(await inspectProject(projectPath, ignoredDirs));
       }
       stack.push(projectPath);
