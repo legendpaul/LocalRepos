@@ -136,6 +136,8 @@ const identifierPatterns = [
   { type: 'class', regex: /class\s+([A-Za-z_$][\w$]*)\s*(?:extends\s+[A-Za-z_$][\w$]*)?\s*{/g },
 ];
 
+const SCOPE_PRIORITY = { method: 0, function: 1, class: 2 };
+
 function normalizeCode(code) {
   return code
     .replace(/\/\/[\s\S]*?$/gm, '')
@@ -172,6 +174,8 @@ function extractCodeBlocks(content) {
         name,
         type,
         code: normalizeCode(raw).slice(0, 10_000),
+        start: match.index,
+        end,
       });
     }
   });
@@ -179,13 +183,41 @@ function extractCodeBlocks(content) {
   return blocks;
 }
 
+function resolveVariableScope(index, codeBlocks) {
+  const containingBlocks = codeBlocks.filter((block) => index >= block.start && index <= block.end);
+  if (!containingBlocks.length) return 'global';
+
+  const prioritized = containingBlocks.sort((a, b) => {
+    const leftPriority = SCOPE_PRIORITY[a.type] ?? Number.MAX_SAFE_INTEGER;
+    const rightPriority = SCOPE_PRIORITY[b.type] ?? Number.MAX_SAFE_INTEGER;
+    if (leftPriority !== rightPriority) return leftPriority - rightPriority;
+    return (a.end - a.start) - (b.end - b.start);
+  });
+
+  const scopeType = prioritized[0]?.type;
+  if (scopeType === 'method') return 'method';
+  if (scopeType === 'function') return 'function';
+  if (scopeType === 'class') return 'class';
+  return 'global';
+}
+
 function extractIdentifiers(content) {
-  const variables = [...content.matchAll(/(?:const|let|var)\s+([a-zA-Z_$][\w$]*)/g)].map((m) => m[1]);
+  const codeBlocks = extractCodeBlocks(content);
+  const variableMatches = [...content.matchAll(/(?:const|let|var)\s+([a-zA-Z_$][\w$]*)/g)];
+  const variables = [];
+  const variableDetails = [];
+
+  variableMatches.forEach((match) => {
+    const name = match[1];
+    const scope = resolveVariableScope(match.index ?? 0, codeBlocks);
+    variables.push(name);
+    variableDetails.push({ name, scope });
+  });
+
   const functions = [...content.matchAll(/function\s+([a-zA-Z_$][\w$]*)/g)].map((m) => m[1]);
   const classes = [...content.matchAll(/class\s+([A-Za-z_$][\w$]*)/g)].map((m) => m[1]);
   const methods = [...content.matchAll(/\n\s*([a-zA-Z_$][\w$]*)\s*\([^;]*\)\s*{/g)].map((m) => m[1]);
-  const codeBlocks = extractCodeBlocks(content);
-  return { variables, functions, classes, methods, codeBlocks };
+  return { variables, variableDetails, functions, classes, methods, codeBlocks };
 }
 
 async function hashFile(filePath) {
@@ -301,6 +333,7 @@ async function inspectProject(projectPath, ignoredDirs) {
   const filePaths = await walkFiles(projectPath, ignoredDirs);
   const files = [];
   const variables = [];
+  const variableDetails = [];
   const functions = [];
   const classes = [];
   const methods = [];
@@ -336,6 +369,7 @@ async function inspectProject(projectPath, ignoredDirs) {
         ...identifiers,
       });
       variables.push(...identifiers.variables);
+      variableDetails.push(...identifiers.variableDetails);
       functions.push(...identifiers.functions);
       classes.push(...identifiers.classes);
       methods.push(...identifiers.methods);
@@ -355,11 +389,30 @@ async function inspectProject(projectPath, ignoredDirs) {
 
   collectTechFromPackageJson(projectPath, technologies);
   const hasUncommitted = await gitHasUncommitted(projectPath);
+
+  const variableGroups = {
+    global: new Set(),
+    class: new Set(),
+    function: new Set(),
+    method: new Set(),
+  };
+
+  variableDetails.forEach((detail) => {
+    if (variableGroups[detail.scope]) {
+      variableGroups[detail.scope].add(detail.name);
+    }
+  });
+
+  const variablesByScope = Object.fromEntries(
+    Object.entries(variableGroups).map(([scope, set]) => [scope, [...set].sort((a, b) => a.localeCompare(b))])
+  );
+
   return {
     name,
     path: projectPath,
     files,
     variables: [...new Set(variables)],
+    variableGroups: variablesByScope,
     functions: [...new Set(functions)],
     classes: [...new Set(classes)],
     methods: [...new Set(methods)],

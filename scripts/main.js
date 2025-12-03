@@ -61,6 +61,68 @@ function createIdentifierList(label, items = []) {
   return wrapper;
 }
 
+function createVariableGroupList(variableGroups = {}) {
+  const wrapper = document.createElement('div');
+  wrapper.className = 'identifier-list';
+
+  const heading = document.createElement('p');
+  heading.className = 'eyebrow';
+  heading.textContent = 'Variables';
+  wrapper.appendChild(heading);
+
+  const groups = [
+    ['global', 'Global'],
+    ['class', 'Class-level'],
+    ['function', 'Function-level'],
+    ['method', 'Method-level'],
+  ];
+
+  const hasVariables = groups.some(([key]) => (variableGroups?.[key] || []).length);
+  if (!hasVariables) {
+    const empty = document.createElement('p');
+    empty.className = 'small';
+    empty.textContent = 'None detected in scan.';
+    wrapper.appendChild(empty);
+    return wrapper;
+  }
+
+  const container = document.createElement('div');
+  container.className = 'variable-groups';
+
+  groups.forEach(([key, label]) => {
+    const items = uniqueSorted(variableGroups?.[key] || []);
+    const section = document.createElement('div');
+    section.className = 'variable-group';
+
+    const title = document.createElement('p');
+    title.className = 'small variable-group__title';
+    title.textContent = label;
+    section.appendChild(title);
+
+    if (!items.length) {
+      const empty = document.createElement('p');
+      empty.className = 'small variable-group__empty';
+      empty.textContent = 'None';
+      section.appendChild(empty);
+    } else {
+      const list = document.createElement('div');
+      list.className = 'tags tags--wrap';
+      items.forEach((item) => {
+        const tag = document.createElement('span');
+        tag.className = 'tag';
+        tag.textContent = item;
+        list.appendChild(tag);
+      });
+      section.appendChild(list);
+    }
+
+    container.appendChild(section);
+  });
+
+  wrapper.appendChild(container);
+  return wrapper;
+}
+
 function setStatus(message, mode = 'idle') {
   statusEl.textContent = message;
   statusEl.className = `status status--${mode}`;
@@ -177,6 +239,8 @@ function renderProject(project) {
   filesTitle.textContent = 'Files with identifiers';
   card.appendChild(filesTitle);
 
+  const variableGroups = project.variableGroups || { global: project.variables || [] };
+
   const details = document.createElement('details');
   details.className = 'card__details';
   const summary = document.createElement('summary');
@@ -186,7 +250,7 @@ function renderProject(project) {
   details.appendChild(createIdentifierList('Classes', project.classes));
   details.appendChild(createIdentifierList('Functions', project.functions));
   details.appendChild(createIdentifierList('Methods', project.methods));
-  details.appendChild(createIdentifierList('Variables', project.variables));
+  details.appendChild(createVariableGroupList(variableGroups));
   card.appendChild(details);
 
   if (project.technologies?.length) {

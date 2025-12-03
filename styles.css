@@ -460,6 +460,27 @@ button.ghost {
   margin-bottom: 8px;
 }
 
+.variable-groups {
+  display: grid;
+  gap: 8px;
+}
+
+.variable-group {
+  display: grid;
+  gap: 6px;
+}
+
+.variable-group__title {
+  color: var(--muted);
+  margin: 0;
+  font-weight: 700;
+}
+
+.variable-group__empty {
+  margin: 0;
+  color: var(--muted);
+}
+
 .pill--success {
   background: rgba(16, 185, 129, 0.12);
   color: var(--success);
