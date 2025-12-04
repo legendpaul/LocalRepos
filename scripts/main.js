@@ -48,6 +48,12 @@ function createIdentifierBreakdown(project) {
   wrapper.className = 'identifier-tree';
 
   const variableGroups = project.variableGroups || { global: project.variables || [] };
+  const identifierLinks = project.identifierLinks || {};
+
+  const classFunctionEntries = Object.entries(identifierLinks.classFunctions || {});
+  const classVariableEntries = Object.entries(identifierLinks.classVariables || {});
+  const functionVariableEntries = Object.entries(identifierLinks.functionVariables || {});
+  const methodVariableEntries = Object.entries(identifierLinks.methodVariables || {});
 
   const scopes = [
     {
@@ -78,6 +84,42 @@ function createIdentifierBreakdown(project) {
       rows: [{ label: 'Method variables', items: variableGroups.method }],
     },
   ];
+
+  const linkScopes = [];
+
+  if (classFunctionEntries.length) {
+    linkScopes.push({
+      label: 'Class → Functions',
+      description: 'Methods declared on each detected class.',
+      rows: classFunctionEntries.map(([className, items]) => ({ label: className, items })),
+    });
+  }
+
+  if (classVariableEntries.length) {
+    linkScopes.push({
+      label: 'Class → Variables',
+      description: 'Fields scoped to specific classes.',
+      rows: classVariableEntries.map(([className, items]) => ({ label: className, items })),
+    });
+  }
+
+  if (functionVariableEntries.length) {
+    linkScopes.push({
+      label: 'Function → Variables',
+      description: 'Locals declared inside standalone functions.',
+      rows: functionVariableEntries.map(([fnName, items]) => ({ label: fnName, items })),
+    });
+  }
+
+  if (methodVariableEntries.length) {
+    linkScopes.push({
+      label: 'Method → Variables',
+      description: 'Locals scoped to individual class methods.',
+      rows: methodVariableEntries.map(([methodName, items]) => ({ label: methodName, items })),
+    });
+  }
+
+  scopes.push(...linkScopes);
 
   const hasAnyIdentifiers = scopes.some((scope) => scope.rows.some((row) => (row.items || []).length));
   if (!hasAnyIdentifiers) {
