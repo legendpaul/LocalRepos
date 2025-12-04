@@ -31,23 +31,7 @@ const toForwardSlashes = (value = '') => String(value || '').replace(/\\/g, '/')
 const normalizeGroupPath = (value = '') => toForwardSlashes(value).replace(/\/+$/, '');
 const uniqueSorted = (list = []) => [...new Set(list)].sort((a, b) => a.localeCompare(b));
 
-function createIdentifierList(label, items = []) {
-  const wrapper = document.createElement('div');
-  wrapper.className = 'identifier-list';
-
-  const heading = document.createElement('p');
-  heading.className = 'eyebrow';
-  heading.textContent = label;
-  wrapper.appendChild(heading);
-
-  if (!items.length) {
-    const empty = document.createElement('p');
-    empty.className = 'small';
-    empty.textContent = 'None detected in scan.';
-    wrapper.appendChild(empty);
-    return wrapper;
-  }
-
+function createTagList(items = []) {
   const list = document.createElement('div');
   list.className = 'tags tags--wrap';
   uniqueSorted(items).forEach((item) => {
@@ -56,70 +40,121 @@ function createIdentifierList(label, items = []) {
     tag.textContent = item;
     list.appendChild(tag);
   });
-
-  wrapper.appendChild(list);
-  return wrapper;
+  return list;
 }
 
-function createVariableGroupList(variableGroups = {}) {
+function createIdentifierBreakdown(project) {
   const wrapper = document.createElement('div');
-  wrapper.className = 'identifier-list';
+  wrapper.className = 'identifier-tree';
 
-  const heading = document.createElement('p');
-  heading.className = 'eyebrow';
-  heading.textContent = 'Variables';
-  wrapper.appendChild(heading);
+  const variableGroups = project.variableGroups || { global: project.variables || [] };
 
-  const groups = [
-    ['global', 'Global'],
-    ['class', 'Class-level'],
-    ['function', 'Function-level'],
-    ['method', 'Method-level'],
+  const scopes = [
+    {
+      label: 'Global scope',
+      description: 'Top-level exports available across files.',
+      rows: [
+        { label: 'Classes', items: project.classes },
+        { label: 'Functions', items: project.functions },
+        { label: 'Variables', items: variableGroups.global },
+      ],
+    },
+    {
+      label: 'Inside classes',
+      description: 'Members and fields declared on classes.',
+      rows: [
+        { label: 'Methods', items: project.methods },
+        { label: 'Variables', items: variableGroups.class },
+      ],
+    },
+    {
+      label: 'Inside functions',
+      description: 'Locals declared in standalone functions.',
+      rows: [{ label: 'Variables', items: variableGroups.function }],
+    },
+    {
+      label: 'Inside methods',
+      description: 'Locals scoped to class or instance methods.',
+      rows: [{ label: 'Variables', items: variableGroups.method }],
+    },
   ];
 
-  const hasVariables = groups.some(([key]) => (variableGroups?.[key] || []).length);
-  if (!hasVariables) {
+  const hasAnyIdentifiers = scopes.some((scope) => scope.rows.some((row) => (row.items || []).length));
+  if (!hasAnyIdentifiers) {
     const empty = document.createElement('p');
     empty.className = 'small';
-    empty.textContent = 'None detected in scan.';
+    empty.textContent = 'No identifiers detected in scan.';
     wrapper.appendChild(empty);
     return wrapper;
   }
 
-  const container = document.createElement('div');
-  container.className = 'variable-groups';
+  const list = document.createElement('ul');
+  list.className = 'identifier-tree__list';
 
-  groups.forEach(([key, label]) => {
-    const items = uniqueSorted(variableGroups?.[key] || []);
-    const section = document.createElement('div');
-    section.className = 'variable-group';
+  scopes.forEach((scope) => {
+    const scopeItem = document.createElement('li');
+    scopeItem.className = 'identifier-tree__node identifier-tree__node--scope';
 
-    const title = document.createElement('p');
-    title.className = 'small variable-group__title';
-    title.textContent = label;
-    section.appendChild(title);
+    const details = document.createElement('details');
+    details.open = true;
+    details.className = 'identifier-tree__details';
 
-    if (!items.length) {
-      const empty = document.createElement('p');
-      empty.className = 'small variable-group__empty';
-      empty.textContent = 'None';
-      section.appendChild(empty);
-    } else {
-      const list = document.createElement('div');
-      list.className = 'tags tags--wrap';
-      items.forEach((item) => {
-        const tag = document.createElement('span');
-        tag.className = 'tag';
-        tag.textContent = item;
-        list.appendChild(tag);
-      });
-      section.appendChild(list);
+    const summary = document.createElement('summary');
+    summary.className = 'identifier-tree__summary';
+
+    const label = document.createElement('span');
+    label.className = 'identifier-tree__label';
+    label.textContent = scope.label;
+    summary.appendChild(label);
+
+    if (scope.description) {
+      const desc = document.createElement('span');
+      desc.className = 'identifier-tree__description';
+      desc.textContent = scope.description;
+      summary.appendChild(desc);
     }
 
-    container.appendChild(section);
+    details.appendChild(summary);
+
+    const rowList = document.createElement('ul');
+    rowList.className = 'identifier-tree__list identifier-tree__list--rows';
+
+    scope.rows.forEach((row) => {
+      const rowItem = document.createElement('li');
+      rowItem.className = 'identifier-tree__node identifier-tree__node--row';
+
+      const rowHeader = document.createElement('div');
+      rowHeader.className = 'identifier-tree__row-header';
+
+      const rowLabel = document.createElement('span');
+      rowLabel.className = 'small identifier-tree__row-label';
+      rowLabel.textContent = row.label;
+      rowHeader.appendChild(rowLabel);
+
+      const items = uniqueSorted(row.items || []);
+      const values = document.createElement('div');
+      values.className = 'identifier-tree__values';
+
+      if (!items.length) {
+        const empty = document.createElement('p');
+        empty.className = 'small identifier-tree__empty';
+        empty.textContent = 'None';
+        values.appendChild(empty);
+      } else {
+        values.appendChild(createTagList(items));
+      }
+
+      rowHeader.appendChild(values);
+      rowItem.appendChild(rowHeader);
+      rowList.appendChild(rowItem);
+    });
+
+    details.appendChild(rowList);
+    scopeItem.appendChild(details);
+    list.appendChild(scopeItem);
   });
 
-  wrapper.appendChild(container);
+  wrapper.appendChild(list);
   return wrapper;
 }
 
@@ -239,18 +274,13 @@ function renderProject(project) {
   filesTitle.textContent = 'Files with identifiers';
   card.appendChild(filesTitle);
 
-  const variableGroups = project.variableGroups || { global: project.variables || [] };
-
   const details = document.createElement('details');
   details.className = 'card__details';
   const summary = document.createElement('summary');
   summary.textContent = 'Identifier breakdown';
   details.appendChild(summary);
 
-  details.appendChild(createIdentifierList('Classes', project.classes));
-  details.appendChild(createIdentifierList('Functions', project.functions));
-  details.appendChild(createIdentifierList('Methods', project.methods));
-  details.appendChild(createVariableGroupList(variableGroups));
+  details.appendChild(createIdentifierBreakdown(project));
   card.appendChild(details);
 
   if (project.technologies?.length) {

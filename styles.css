@@ -453,30 +453,98 @@ button.ghost {
   margin-bottom: 8px;
 }
 
-.identifier-list {
+.identifier-tree {
+  background: #0b1222;
   border: 1px dashed var(--border);
+  border-radius: 12px;
+  padding: 8px 10px;
+}
+
+.identifier-tree__list {
+  list-style: none;
+  margin: 0;
+  padding-left: 14px;
+}
+
+.identifier-tree__list--rows {
+  padding-left: 22px;
+  margin-top: 4px;
+}
+
+.identifier-tree__node {
+  position: relative;
+  padding-left: 12px;
+  margin: 6px 0;
+}
+
+.identifier-tree__node::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 12px;
+  width: 10px;
+  height: 1px;
+  background: var(--border);
+}
+
+.identifier-tree__node::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 12px;
+  bottom: -12px;
+  width: 1px;
+  background: var(--border);
+}
+
+.identifier-tree__node:last-child::after {
+  height: 12px;
+}
+
+.identifier-tree__details {
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid var(--border);
   border-radius: 10px;
   padding: 8px 10px;
-  margin-bottom: 8px;
 }
 
-.variable-groups {
-  display: grid;
-  gap: 8px;
+.identifier-tree__details[open] > summary::marker {
+  color: var(--accent);
 }
 
-.variable-group {
-  display: grid;
-  gap: 6px;
+.identifier-tree__summary {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  cursor: pointer;
 }
 
-.variable-group__title {
-  color: var(--muted);
-  margin: 0;
+.identifier-tree__label {
   font-weight: 700;
 }
 
-.variable-group__empty {
+.identifier-tree__description {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.identifier-tree__row-header {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.identifier-tree__row-label {
+  color: var(--muted);
+  min-width: 90px;
+}
+
+.identifier-tree__values {
+  flex: 1;
+}
+
+.identifier-tree__empty {
   margin: 0;
   color: var(--muted);
 }
