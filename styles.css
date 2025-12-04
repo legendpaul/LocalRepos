@@ -453,30 +453,49 @@ button.ghost {
   margin-bottom: 8px;
 }
 
-.identifier-list {
-  border: 1px dashed var(--border);
-  border-radius: 10px;
-  padding: 8px 10px;
-  margin-bottom: 8px;
+.identifier-breakdown {
+  display: grid;
+  gap: 10px;
 }
 
-.variable-groups {
+.identifier-scope {
+  background: #0b1222;
+  border: 1px dashed var(--border);
+  border-radius: 10px;
+  padding: 10px 12px;
   display: grid;
   gap: 8px;
 }
 
-.variable-group {
-  display: grid;
-  gap: 6px;
+.identifier-scope__header {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  align-items: flex-start;
 }
 
-.variable-group__title {
-  color: var(--muted);
+.identifier-scope__description {
   margin: 0;
-  font-weight: 700;
+  color: var(--muted);
 }
 
-.variable-group__empty {
+.identifier-scope__row {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+}
+
+.identifier-scope__label {
+  margin: 0;
+  color: var(--muted);
+  min-width: 120px;
+}
+
+.identifier-scope__values {
+  flex: 1;
+}
+
+.identifier-scope__empty {
   margin: 0;
   color: var(--muted);
 }

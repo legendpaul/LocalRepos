@@ -31,23 +31,7 @@ const toForwardSlashes = (value = '') => String(value || '').replace(/\\/g, '/')
 const normalizeGroupPath = (value = '') => toForwardSlashes(value).replace(/\/+$/, '');
 const uniqueSorted = (list = []) => [...new Set(list)].sort((a, b) => a.localeCompare(b));
 
-function createIdentifierList(label, items = []) {
-  const wrapper = document.createElement('div');
-  wrapper.className = 'identifier-list';
-
-  const heading = document.createElement('p');
-  heading.className = 'eyebrow';
-  heading.textContent = label;
-  wrapper.appendChild(heading);
-
-  if (!items.length) {
-    const empty = document.createElement('p');
-    empty.className = 'small';
-    empty.textContent = 'None detected in scan.';
-    wrapper.appendChild(empty);
-    return wrapper;
-  }
-
+function createTagList(items = []) {
   const list = document.createElement('div');
   list.className = 'tags tags--wrap';
   uniqueSorted(items).forEach((item) => {
@@ -56,70 +40,104 @@ function createIdentifierList(label, items = []) {
     tag.textContent = item;
     list.appendChild(tag);
   });
-
-  wrapper.appendChild(list);
-  return wrapper;
+  return list;
 }
 
-function createVariableGroupList(variableGroups = {}) {
+function createIdentifierBreakdown(project) {
   const wrapper = document.createElement('div');
-  wrapper.className = 'identifier-list';
+  wrapper.className = 'identifier-breakdown';
 
-  const heading = document.createElement('p');
-  heading.className = 'eyebrow';
-  heading.textContent = 'Variables';
-  wrapper.appendChild(heading);
+  const variableGroups = project.variableGroups || { global: project.variables || [] };
 
-  const groups = [
-    ['global', 'Global'],
-    ['class', 'Class-level'],
-    ['function', 'Function-level'],
-    ['method', 'Method-level'],
+  const scopes = [
+    {
+      label: 'Global scope',
+      description: 'Top-level exports available across files.',
+      rows: [
+        { label: 'Classes', items: project.classes },
+        { label: 'Functions', items: project.functions },
+        { label: 'Variables', items: variableGroups.global },
+      ],
+    },
+    {
+      label: 'Inside classes',
+      description: 'Members and fields declared on classes.',
+      rows: [
+        { label: 'Methods', items: project.methods },
+        { label: 'Variables', items: variableGroups.class },
+      ],
+    },
+    {
+      label: 'Inside functions',
+      description: 'Locals declared in standalone functions.',
+      rows: [{ label: 'Variables', items: variableGroups.function }],
+    },
+    {
+      label: 'Inside methods',
+      description: 'Locals scoped to class or instance methods.',
+      rows: [{ label: 'Variables', items: variableGroups.method }],
+    },
   ];
 
-  const hasVariables = groups.some(([key]) => (variableGroups?.[key] || []).length);
-  if (!hasVariables) {
+  const hasAnyIdentifiers = scopes.some((scope) => scope.rows.some((row) => (row.items || []).length));
+  if (!hasAnyIdentifiers) {
     const empty = document.createElement('p');
     empty.className = 'small';
-    empty.textContent = 'None detected in scan.';
+    empty.textContent = 'No identifiers detected in scan.';
     wrapper.appendChild(empty);
     return wrapper;
   }
 
-  const container = document.createElement('div');
-  container.className = 'variable-groups';
-
-  groups.forEach(([key, label]) => {
-    const items = uniqueSorted(variableGroups?.[key] || []);
+  scopes.forEach((scope) => {
     const section = document.createElement('div');
-    section.className = 'variable-group';
+    section.className = 'identifier-scope';
+
+    const header = document.createElement('div');
+    header.className = 'identifier-scope__header';
 
     const title = document.createElement('p');
-    title.className = 'small variable-group__title';
-    title.textContent = label;
-    section.appendChild(title);
+    title.className = 'eyebrow';
+    title.textContent = scope.label;
+    header.appendChild(title);
 
-    if (!items.length) {
-      const empty = document.createElement('p');
-      empty.className = 'small variable-group__empty';
-      empty.textContent = 'None';
-      section.appendChild(empty);
-    } else {
-      const list = document.createElement('div');
-      list.className = 'tags tags--wrap';
-      items.forEach((item) => {
-        const tag = document.createElement('span');
-        tag.className = 'tag';
-        tag.textContent = item;
-        list.appendChild(tag);
-      });
-      section.appendChild(list);
+    if (scope.description) {
+      const description = document.createElement('p');
+      description.className = 'small identifier-scope__description';
+      description.textContent = scope.description;
+      header.appendChild(description);
     }
 
-    container.appendChild(section);
+    section.appendChild(header);
+
+    scope.rows.forEach((row) => {
+      const rowEl = document.createElement('div');
+      rowEl.className = 'identifier-scope__row';
+
+      const label = document.createElement('p');
+      label.className = 'small identifier-scope__label';
+      label.textContent = row.label;
+      rowEl.appendChild(label);
+
+      const values = document.createElement('div');
+      values.className = 'identifier-scope__values';
+
+      const items = uniqueSorted(row.items || []);
+      if (!items.length) {
+        const empty = document.createElement('p');
+        empty.className = 'small identifier-scope__empty';
+        empty.textContent = 'None';
+        values.appendChild(empty);
+      } else {
+        values.appendChild(createTagList(items));
+      }
+
+      rowEl.appendChild(values);
+      section.appendChild(rowEl);
+    });
+
+    wrapper.appendChild(section);
   });
 
-  wrapper.appendChild(container);
   return wrapper;
 }
 
@@ -239,18 +257,13 @@ function renderProject(project) {
   filesTitle.textContent = 'Files with identifiers';
   card.appendChild(filesTitle);
 
-  const variableGroups = project.variableGroups || { global: project.variables || [] };
-
   const details = document.createElement('details');
   details.className = 'card__details';
   const summary = document.createElement('summary');
   summary.textContent = 'Identifier breakdown';
   details.appendChild(summary);
 
-  details.appendChild(createIdentifierList('Classes', project.classes));
-  details.appendChild(createIdentifierList('Functions', project.functions));
-  details.appendChild(createIdentifierList('Methods', project.methods));
-  details.appendChild(createVariableGroupList(variableGroups));
+  details.appendChild(createIdentifierBreakdown(project));
   card.appendChild(details);
 
   if (project.technologies?.length) {
