@@ -219,6 +219,134 @@ function createIdentifierBreakdown(project) {
   return wrapper;
 }
 
+function createObjectDesignMap(project) {
+  const wrapper = document.createElement('div');
+  wrapper.className = 'object-map';
+
+  const { identifierLinks = {} } = project || {};
+  const classFunctions = identifierLinks.classFunctions || {};
+  const methodVariables = identifierLinks.methodVariables || {};
+  const functionVariables = identifierLinks.functionVariables || {};
+
+  const classEntries = Object.entries(classFunctions).sort((a, b) => a[0].localeCompare(b[0]));
+  const standaloneFunctions = uniqueSorted(project.functions || []);
+
+  const hasContent = classEntries.length || standaloneFunctions.length;
+  if (!hasContent) {
+    const empty = document.createElement('p');
+    empty.className = 'small object-map__empty';
+    empty.textContent = 'No class or function relationships detected yet.';
+    wrapper.appendChild(empty);
+    return wrapper;
+  }
+
+  const makeBadge = (text) => {
+    const badge = document.createElement('span');
+    badge.className = 'object-map__badge';
+    badge.textContent = text;
+    return badge;
+  };
+
+  if (classEntries.length) {
+    const classLabel = document.createElement('p');
+    classLabel.className = 'object-map__section-label';
+    classLabel.textContent = 'Classes and their methods';
+    wrapper.appendChild(classLabel);
+
+    const classList = document.createElement('ul');
+    classList.className = 'object-map__list';
+
+    classEntries.forEach(([className, methods]) => {
+      const classItem = document.createElement('li');
+      classItem.className = 'object-map__node object-map__node--class';
+
+      const header = document.createElement('div');
+      header.className = 'object-map__header';
+      const title = document.createElement('span');
+      title.className = 'object-map__label';
+      title.textContent = className;
+      header.appendChild(title);
+      header.appendChild(makeBadge(formatCount('method', methods.length)));
+      classItem.appendChild(header);
+
+      if (methods.length) {
+        const methodList = document.createElement('ul');
+        methodList.className = 'object-map__list object-map__list--nested';
+
+        uniqueSorted(methods).forEach((methodName) => {
+          const methodItem = document.createElement('li');
+          methodItem.className = 'object-map__node object-map__node--method';
+
+          const methodHeader = document.createElement('div');
+          methodHeader.className = 'object-map__header object-map__header--child';
+          const methodLabel = document.createElement('span');
+          methodLabel.className = 'object-map__label object-map__label--method';
+          methodLabel.textContent = methodName;
+          methodHeader.appendChild(methodLabel);
+
+          const variables = uniqueSorted(methodVariables[methodName] || []);
+          methodHeader.appendChild(makeBadge(variables.length ? formatCount('variable', variables.length) : 'No variables'));
+          methodItem.appendChild(methodHeader);
+
+          if (variables.length) {
+            const variableTags = document.createElement('div');
+            variableTags.className = 'object-map__values';
+            variableTags.appendChild(createTagList(variables));
+            methodItem.appendChild(variableTags);
+          }
+
+          methodList.appendChild(methodItem);
+        });
+
+        classItem.appendChild(methodList);
+      }
+
+      classList.appendChild(classItem);
+    });
+
+    wrapper.appendChild(classList);
+  }
+
+  if (standaloneFunctions.length) {
+    const functionLabel = document.createElement('p');
+    functionLabel.className = 'object-map__section-label';
+    functionLabel.textContent = 'Standalone functions';
+    wrapper.appendChild(functionLabel);
+
+    const functionList = document.createElement('ul');
+    functionList.className = 'object-map__list';
+
+    standaloneFunctions.forEach((fnName) => {
+      const functionItem = document.createElement('li');
+      functionItem.className = 'object-map__node object-map__node--function';
+
+      const functionHeader = document.createElement('div');
+      functionHeader.className = 'object-map__header';
+      const functionLabel = document.createElement('span');
+      functionLabel.className = 'object-map__label';
+      functionLabel.textContent = fnName;
+      functionHeader.appendChild(functionLabel);
+
+      const variables = uniqueSorted(functionVariables[fnName] || []);
+      functionHeader.appendChild(makeBadge(variables.length ? formatCount('variable', variables.length) : 'No variables'));
+      functionItem.appendChild(functionHeader);
+
+      if (variables.length) {
+        const variableTags = document.createElement('div');
+        variableTags.className = 'object-map__values';
+        variableTags.appendChild(createTagList(variables));
+        functionItem.appendChild(variableTags);
+      }
+
+      functionList.appendChild(functionItem);
+    });
+
+    wrapper.appendChild(functionList);
+  }
+
+  return wrapper;
+}
+
 function setStatus(message, mode = 'idle') {
   statusEl.textContent = message;
   statusEl.className = `status status--${mode}`;
@@ -343,6 +471,14 @@ function renderProject(project) {
 
   details.appendChild(createIdentifierBreakdown(project));
   card.appendChild(details);
+
+  const objectDetails = document.createElement('details');
+  objectDetails.className = 'card__details';
+  const objectSummary = document.createElement('summary');
+  objectSummary.textContent = 'Object design relationships';
+  objectDetails.appendChild(objectSummary);
+  objectDetails.appendChild(createObjectDesignMap(project));
+  card.appendChild(objectDetails);
 
   if (project.technologies?.length) {
     const techLabel = document.createElement('p');
@@ -845,6 +981,12 @@ function showRelationshipDetails(projectName) {
     noTech.textContent = 'No technologies detected.';
     relationshipDetails.appendChild(noTech);
   }
+
+  const objectLabel = document.createElement('p');
+  objectLabel.className = 'eyebrow';
+  objectLabel.textContent = 'Object design';
+  relationshipDetails.appendChild(objectLabel);
+  relationshipDetails.appendChild(createObjectDesignMap(project));
 
   const linksLabel = document.createElement('p');
   linksLabel.className = 'eyebrow';
