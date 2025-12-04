@@ -54,28 +54,28 @@ function createIdentifierBreakdown(project) {
       label: 'Global scope',
       description: 'Top-level exports available across files.',
       rows: [
+        { label: 'Global variables', items: variableGroups.global },
         { label: 'Classes', items: project.classes },
         { label: 'Functions', items: project.functions },
-        { label: 'Variables', items: variableGroups.global },
       ],
     },
     {
       label: 'Inside classes',
       description: 'Members and fields declared on classes.',
       rows: [
+        { label: 'Class variables', items: variableGroups.class },
         { label: 'Methods', items: project.methods },
-        { label: 'Variables', items: variableGroups.class },
       ],
     },
     {
       label: 'Inside functions',
       description: 'Locals declared in standalone functions.',
-      rows: [{ label: 'Variables', items: variableGroups.function }],
+      rows: [{ label: 'Function variables', items: variableGroups.function }],
     },
     {
       label: 'Inside methods',
       description: 'Locals scoped to class or instance methods.',
-      rows: [{ label: 'Variables', items: variableGroups.method }],
+      rows: [{ label: 'Method variables', items: variableGroups.method }],
     },
   ];
 
@@ -90,6 +90,13 @@ function createIdentifierBreakdown(project) {
 
   const list = document.createElement('ul');
   list.className = 'identifier-tree__list';
+
+  const createCountBadge = (value) => {
+    const badge = document.createElement('span');
+    badge.className = 'identifier-tree__badge';
+    badge.textContent = value;
+    return badge;
+  };
 
   scopes.forEach((scope) => {
     const scopeItem = document.createElement('li');
@@ -114,6 +121,9 @@ function createIdentifierBreakdown(project) {
       summary.appendChild(desc);
     }
 
+    const scopeCount = scope.rows.reduce((total, row) => total + (row.items?.length || 0), 0);
+    summary.appendChild(createCountBadge(scopeCount ? formatCount('item', scopeCount) : 'Empty'));
+
     details.appendChild(summary);
 
     const rowList = document.createElement('ul');
@@ -123,13 +133,22 @@ function createIdentifierBreakdown(project) {
       const rowItem = document.createElement('li');
       rowItem.className = 'identifier-tree__node identifier-tree__node--row';
 
-      const rowHeader = document.createElement('div');
+      const rowDetails = document.createElement('details');
+      rowDetails.className = 'identifier-tree__row-details';
+      rowDetails.open = !!(row.items && row.items.length);
+
+      const rowHeader = document.createElement('summary');
       rowHeader.className = 'identifier-tree__row-header';
 
       const rowLabel = document.createElement('span');
       rowLabel.className = 'small identifier-tree__row-label';
       rowLabel.textContent = row.label;
       rowHeader.appendChild(rowLabel);
+
+      const itemCount = row.items?.length || 0;
+      rowHeader.appendChild(createCountBadge(itemCount ? formatCount('item', itemCount) : 'None'));
+
+      rowDetails.appendChild(rowHeader);
 
       const items = uniqueSorted(row.items || []);
       const values = document.createElement('div');
@@ -138,14 +157,14 @@ function createIdentifierBreakdown(project) {
       if (!items.length) {
         const empty = document.createElement('p');
         empty.className = 'small identifier-tree__empty';
-        empty.textContent = 'None';
+        empty.textContent = 'No identifiers in this scope yet.';
         values.appendChild(empty);
       } else {
         values.appendChild(createTagList(items));
       }
 
-      rowHeader.appendChild(values);
-      rowItem.appendChild(rowHeader);
+      rowDetails.appendChild(values);
+      rowItem.appendChild(rowDetails);
       rowList.appendChild(rowItem);
     });
 

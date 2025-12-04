@@ -514,9 +514,11 @@ button.ghost {
 
 .identifier-tree__summary {
   display: flex;
-  flex-direction: column;
-  gap: 4px;
+  flex-direction: row;
+  flex-wrap: wrap;
+  gap: 8px;
   cursor: pointer;
+  align-items: center;
 }
 
 .identifier-tree__label {
@@ -526,6 +528,16 @@ button.ghost {
 .identifier-tree__description {
   color: var(--muted);
   font-size: 13px;
+}
+
+.identifier-tree__badge {
+  background: rgba(148, 163, 184, 0.12);
+  border: 1px solid rgba(148, 163, 184, 0.5);
+  color: var(--muted);
+  padding: 2px 6px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
 }
 
 .identifier-tree__row-header {
@@ -538,6 +550,17 @@ button.ghost {
 .identifier-tree__row-label {
   color: var(--muted);
   min-width: 90px;
+}
+
+.identifier-tree__row-details {
+  border: 1px dashed var(--border);
+  border-radius: 10px;
+  padding: 8px 10px;
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.identifier-tree__row-details > summary::marker {
+  color: var(--accent);
 }
 
 .identifier-tree__values {
