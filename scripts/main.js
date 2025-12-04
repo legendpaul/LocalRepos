@@ -45,7 +45,7 @@ function createTagList(items = []) {
 
 function createIdentifierBreakdown(project) {
   const wrapper = document.createElement('div');
-  wrapper.className = 'identifier-breakdown';
+  wrapper.className = 'identifier-tree';
 
   const variableGroups = project.variableGroups || { global: project.variables || [] };
 
@@ -88,56 +88,73 @@ function createIdentifierBreakdown(project) {
     return wrapper;
   }
 
+  const list = document.createElement('ul');
+  list.className = 'identifier-tree__list';
+
   scopes.forEach((scope) => {
-    const section = document.createElement('div');
-    section.className = 'identifier-scope';
+    const scopeItem = document.createElement('li');
+    scopeItem.className = 'identifier-tree__node identifier-tree__node--scope';
 
-    const header = document.createElement('div');
-    header.className = 'identifier-scope__header';
+    const details = document.createElement('details');
+    details.open = true;
+    details.className = 'identifier-tree__details';
 
-    const title = document.createElement('p');
-    title.className = 'eyebrow';
-    title.textContent = scope.label;
-    header.appendChild(title);
+    const summary = document.createElement('summary');
+    summary.className = 'identifier-tree__summary';
+
+    const label = document.createElement('span');
+    label.className = 'identifier-tree__label';
+    label.textContent = scope.label;
+    summary.appendChild(label);
 
     if (scope.description) {
-      const description = document.createElement('p');
-      description.className = 'small identifier-scope__description';
-      description.textContent = scope.description;
-      header.appendChild(description);
+      const desc = document.createElement('span');
+      desc.className = 'identifier-tree__description';
+      desc.textContent = scope.description;
+      summary.appendChild(desc);
     }
 
-    section.appendChild(header);
+    details.appendChild(summary);
+
+    const rowList = document.createElement('ul');
+    rowList.className = 'identifier-tree__list identifier-tree__list--rows';
 
     scope.rows.forEach((row) => {
-      const rowEl = document.createElement('div');
-      rowEl.className = 'identifier-scope__row';
+      const rowItem = document.createElement('li');
+      rowItem.className = 'identifier-tree__node identifier-tree__node--row';
 
-      const label = document.createElement('p');
-      label.className = 'small identifier-scope__label';
-      label.textContent = row.label;
-      rowEl.appendChild(label);
+      const rowHeader = document.createElement('div');
+      rowHeader.className = 'identifier-tree__row-header';
 
-      const values = document.createElement('div');
-      values.className = 'identifier-scope__values';
+      const rowLabel = document.createElement('span');
+      rowLabel.className = 'small identifier-tree__row-label';
+      rowLabel.textContent = row.label;
+      rowHeader.appendChild(rowLabel);
 
       const items = uniqueSorted(row.items || []);
+      const values = document.createElement('div');
+      values.className = 'identifier-tree__values';
+
       if (!items.length) {
         const empty = document.createElement('p');
-        empty.className = 'small identifier-scope__empty';
+        empty.className = 'small identifier-tree__empty';
         empty.textContent = 'None';
         values.appendChild(empty);
       } else {
         values.appendChild(createTagList(items));
       }
 
-      rowEl.appendChild(values);
-      section.appendChild(rowEl);
+      rowHeader.appendChild(values);
+      rowItem.appendChild(rowHeader);
+      rowList.appendChild(rowItem);
     });
 
-    wrapper.appendChild(section);
+    details.appendChild(rowList);
+    scopeItem.appendChild(details);
+    list.appendChild(scopeItem);
   });
 
+  wrapper.appendChild(list);
   return wrapper;
 }
 
