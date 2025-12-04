@@ -183,9 +183,15 @@ function extractCodeBlocks(content) {
   return blocks;
 }
 
+function findContainingBlock(index, codeBlocks, type) {
+  return codeBlocks
+    .filter((block) => block.type === type && index >= block.start && index <= block.end)
+    .sort((a, b) => (a.end - a.start) - (b.end - b.start))[0];
+}
+
 function resolveVariableScope(index, codeBlocks) {
   const containingBlocks = codeBlocks.filter((block) => index >= block.start && index <= block.end);
-  if (!containingBlocks.length) return 'global';
+  if (!containingBlocks.length) return { scope: 'global', owner: null };
 
   const prioritized = containingBlocks.sort((a, b) => {
     const leftPriority = SCOPE_PRIORITY[a.type] ?? Number.MAX_SAFE_INTEGER;
@@ -194,11 +200,11 @@ function resolveVariableScope(index, codeBlocks) {
     return (a.end - a.start) - (b.end - b.start);
   });
 
-  const scopeType = prioritized[0]?.type;
-  if (scopeType === 'method') return 'method';
-  if (scopeType === 'function') return 'function';
-  if (scopeType === 'class') return 'class';
-  return 'global';
+  const scopeBlock = prioritized[0];
+  if (scopeBlock.type === 'method') return { scope: 'method', owner: scopeBlock.name };
+  if (scopeBlock.type === 'function') return { scope: 'function', owner: scopeBlock.name };
+  if (scopeBlock.type === 'class') return { scope: 'class', owner: scopeBlock.name };
+  return { scope: 'global', owner: null };
 }
 
 function extractIdentifiers(content) {
@@ -209,9 +215,9 @@ function extractIdentifiers(content) {
 
   variableMatches.forEach((match) => {
     const name = match[1];
-    const scope = resolveVariableScope(match.index ?? 0, codeBlocks);
+    const { scope, owner } = resolveVariableScope(match.index ?? 0, codeBlocks);
     variables.push(name);
-    variableDetails.push({ name, scope });
+    variableDetails.push({ name, scope, owner: owner || null });
   });
 
   const functions = [...content.matchAll(/function\s+([a-zA-Z_$][\w$]*)/g)].map((m) => m[1]);
@@ -341,6 +347,10 @@ async function inspectProject(projectPath, ignoredDirs) {
   const technologies = new Set();
   const referenceMentions = new Set();
   const name = getProjectName(projectPath);
+  const classFunctions = new Map();
+  const classVariables = new Map();
+  const functionVariables = new Map();
+  const methodVariables = new Map();
 
   for (const filePath of filePaths) {
     try {
@@ -374,6 +384,17 @@ async function inspectProject(projectPath, ignoredDirs) {
       classes.push(...identifiers.classes);
       methods.push(...identifiers.methods);
 
+      identifiers.codeBlocks
+        .filter((block) => block.type === 'method')
+        .forEach((block) => {
+          const parentClass = findContainingBlock(block.start, identifiers.codeBlocks, 'class');
+          if (!parentClass) return;
+          if (!classFunctions.has(parentClass.name)) {
+            classFunctions.set(parentClass.name, new Set());
+          }
+          classFunctions.get(parentClass.name).add(block.name);
+        });
+
       identifiers.codeBlocks.forEach((block) => {
         identifierDetails.push({
           name: block.name,
@@ -401,11 +422,41 @@ async function inspectProject(projectPath, ignoredDirs) {
     if (variableGroups[detail.scope]) {
       variableGroups[detail.scope].add(detail.name);
     }
+
+    if (detail.scope === 'class' && detail.owner) {
+      if (!classVariables.has(detail.owner)) classVariables.set(detail.owner, new Set());
+      classVariables.get(detail.owner).add(detail.name);
+    }
+
+    if (detail.scope === 'function' && detail.owner) {
+      if (!functionVariables.has(detail.owner)) functionVariables.set(detail.owner, new Set());
+      functionVariables.get(detail.owner).add(detail.name);
+    }
+
+    if (detail.scope === 'method' && detail.owner) {
+      if (!methodVariables.has(detail.owner)) methodVariables.set(detail.owner, new Set());
+      methodVariables.get(detail.owner).add(detail.name);
+    }
   });
 
   const variablesByScope = Object.fromEntries(
     Object.entries(variableGroups).map(([scope, set]) => [scope, [...set].sort((a, b) => a.localeCompare(b))])
   );
+
+  const identifierLinks = {
+    classFunctions: Object.fromEntries(
+      [...classFunctions.entries()].map(([className, set]) => [className, [...set].sort((a, b) => a.localeCompare(b))])
+    ),
+    classVariables: Object.fromEntries(
+      [...classVariables.entries()].map(([className, set]) => [className, [...set].sort((a, b) => a.localeCompare(b))])
+    ),
+    functionVariables: Object.fromEntries(
+      [...functionVariables.entries()].map(([fnName, set]) => [fnName, [...set].sort((a, b) => a.localeCompare(b))])
+    ),
+    methodVariables: Object.fromEntries(
+      [...methodVariables.entries()].map(([methodName, set]) => [methodName, [...set].sort((a, b) => a.localeCompare(b))])
+    ),
+  };
 
   return {
     name,
@@ -417,6 +468,7 @@ async function inspectProject(projectPath, ignoredDirs) {
     classes: [...new Set(classes)],
     methods: [...new Set(methods)],
     identifierDetails,
+    identifierLinks,
     hasUncommitted,
     technologies: [...technologies].sort(),
     referenceMentions: [...referenceMentions],
