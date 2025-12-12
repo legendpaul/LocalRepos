@@ -76,6 +76,10 @@
         </div>
       </form>
       <div id="status" class="status status--idle">Waiting to scan...</div>
+      <div id="scan-progress" class="progress" hidden aria-live="polite" aria-busy="false">
+        <div class="progress__bar" id="scan-progress-bar"></div>
+        <div class="progress__label" id="scan-progress-label">Preparing scan...</div>
+      </div>
     </section>
 
     <section class="panel" id="filters" hidden>
