@@ -15,6 +15,8 @@ const execAsync = (command, options = {}) =>
   });
 
 const DEFAULT_IGNORED_DIRS = ['node_modules', '.git', '.cache', 'dist', 'build', 'library', 'packagecache'];
+const SCAN_TIME_LIMIT_MS = 25_000;
+const MAX_FILES_PER_SCAN = 4_000;
 const IGNORED_FILES = new Set([
   '.gitignore',
   '.gitattributes',
@@ -311,11 +313,17 @@ function buildIgnoredSet(extraIgnores = []) {
   return set;
 }
 
-async function walkFiles(baseDir, ignoredDirs) {
+function createScanBudget(limitMs = SCAN_TIME_LIMIT_MS, maxFiles = MAX_FILES_PER_SCAN) {
+  return { started: Date.now(), limitMs, maxFiles, scannedFiles: 0, exceeded: false };
+}
+
+async function walkFiles(baseDir, ignoredDirs, budget = createScanBudget()) {
   const files = [];
   const stack = [baseDir];
 
   while (stack.length) {
+    if (budget.exceeded) break;
+
     const current = stack.pop();
     const entries = fs.readdirSync(current, { withFileTypes: true });
     entries.forEach((entry) => {
@@ -323,10 +331,22 @@ async function walkFiles(baseDir, ignoredDirs) {
         return;
       }
 
+      if (budget.exceeded) return;
+
       const fullPath = path.join(current, entry.name);
+      if (Date.now() - budget.started > budget.limitMs) {
+        budget.exceeded = true;
+        return;
+      }
+
       if (entry.isDirectory()) {
         stack.push(fullPath);
       } else if (entry.isFile()) {
+        budget.scannedFiles += 1;
+        if (budget.scannedFiles > budget.maxFiles) {
+          budget.exceeded = true;
+          return;
+        }
         files.push(fullPath);
       }
     });
@@ -335,8 +355,8 @@ async function walkFiles(baseDir, ignoredDirs) {
   return files;
 }
 
-async function inspectProject(projectPath, ignoredDirs) {
-  const filePaths = await walkFiles(projectPath, ignoredDirs);
+async function inspectProject(projectPath, ignoredDirs, budget) {
+  const filePaths = await walkFiles(projectPath, ignoredDirs, budget);
   const files = [];
   const variables = [];
   const variableDetails = [];
@@ -499,11 +519,13 @@ function isNetlifyFunctionsPath(projectPath) {
   return normalized[netlifyIndex + 1] === 'functions';
 }
 
-async function findProjects(rootDir, ignoredDirs) {
+async function findProjects(rootDir, ignoredDirs, budget) {
   const projects = [];
   const stack = [rootDir];
 
   while (stack.length) {
+    if (budget?.exceeded) break;
+
     const current = stack.pop();
     const entries = fs.readdirSync(current, { withFileTypes: true });
 
@@ -516,8 +538,9 @@ async function findProjects(rootDir, ignoredDirs) {
         isProjectDirectory(projectPath) &&
         !isNetlifyFunctionsPath(projectPath)
       ) {
-        projects.push(await inspectProject(projectPath, ignoredDirs));
+        projects.push(await inspectProject(projectPath, ignoredDirs, budget));
       }
+      if (budget?.exceeded) break;
       stack.push(projectPath);
     }
   }
@@ -647,14 +670,22 @@ exports.handler = async function handler(event) {
     }
 
     const ignoredDirs = buildIgnoredSet(Array.isArray(excludeFolders) ? excludeFolders : []);
-    const projects = await findProjects(directory, ignoredDirs);
+    const budget = createScanBudget();
+    const projects = await findProjects(directory, ignoredDirs, budget);
     applyReferences(projects);
     const duplicates = await buildDuplicateMatrix(projects);
     const sharedIdentifiers = findSharedIdentifiers(projects);
 
     return {
       statusCode: 200,
-      body: JSON.stringify({ projects, duplicates, sharedIdentifiers }),
+      body: JSON.stringify({
+        projects,
+        duplicates,
+        sharedIdentifiers,
+        timedOut: budget.exceeded,
+        scannedFileCount: budget.scannedFiles,
+        timeElapsedMs: Date.now() - budget.started,
+      }),
     };
   } catch (error) {
     return {

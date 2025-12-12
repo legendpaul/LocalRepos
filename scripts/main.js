@@ -16,6 +16,9 @@ const relationshipSvg = document.getElementById('relationship-graph');
 const relationshipDetails = document.getElementById('relationship-details');
 const excludeFolderContainer = document.getElementById('exclude-folders');
 const excludeCustomInput = document.getElementById('exclude-custom');
+const progressEl = document.getElementById('scan-progress');
+const progressBarEl = document.getElementById('scan-progress-bar');
+const progressLabelEl = document.getElementById('scan-progress-label');
 
 let allProjects = [];
 let duplicatesData = [];
@@ -24,6 +27,7 @@ let relationshipEdges = [];
 let activeScanId = 0;
 let hiddenProjects = new Set();
 let currentScanRoot = '';
+let progressTimer;
 
 const formatCount = (label, count) => `${count} ${label}${count === 1 ? '' : 's'}`;
 const projectAnchorId = (name) => `project-${name.replace(/[^a-z0-9]+/gi, '-').toLowerCase()}`;
@@ -946,6 +950,93 @@ function getExcludedFolders() {
   return [...new Set([...checkboxValues, ...customValues])];
 }
 
+function updateProgressLabel(message) {
+  if (!progressLabelEl) return;
+  progressLabelEl.textContent = message;
+}
+
+function stopProgress(success = false) {
+  if (!progressEl) return;
+  clearInterval(progressTimer);
+  progressTimer = undefined;
+  progressBarEl.style.width = success ? '100%' : '0%';
+  progressEl.hidden = true;
+  progressEl.setAttribute('aria-busy', 'false');
+}
+
+function startProgress(label = 'Scanning projects...') {
+  if (!progressEl) return;
+
+  const targetMs = 30_000;
+  const start = Date.now();
+
+  progressEl.hidden = false;
+  progressEl.setAttribute('aria-busy', 'true');
+  progressBarEl.style.width = '0%';
+  updateProgressLabel(label);
+
+  progressTimer = setInterval(() => {
+    const elapsed = Date.now() - start;
+    const fraction = Math.min(elapsed / targetMs, 0.95);
+    progressBarEl.style.width = `${Math.round(fraction * 100)}%`;
+    updateProgressLabel(`${label} · ${Math.round(elapsed / 1000)}s elapsed`);
+  }, 500);
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function attemptScan({ directory, excludeFolders, scanId, attempt = 1, maxAttempts = 3 }) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 28_000);
+
+  try {
+    const response = await fetch('/.netlify/functions/scan-projects', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ directory, excludeFolders }),
+      signal: controller.signal,
+    });
+
+    const rawBody = await response.text();
+    let payload;
+
+    try {
+      payload = rawBody ? JSON.parse(rawBody) : {};
+    } catch (parseError) {
+      const fallbackMessage = rawBody?.slice(0, 200) || 'Invalid server response';
+      throw new Error(`Request failed: ${fallbackMessage}`);
+    }
+
+    if (!response.ok) {
+      const message = payload?.error || response.statusText;
+      throw new Error(`Request failed: ${message}`);
+    }
+
+    if (scanId !== activeScanId) {
+      return null;
+    }
+
+    return payload;
+  } catch (error) {
+    if (scanId !== activeScanId) return null;
+
+    const timedOut = error?.name === 'AbortError' || /timeout/i.test(error?.message || '');
+    if (attempt < maxAttempts && (timedOut || /Request failed/i.test(error?.message || ''))) {
+      const nextAttempt = attempt + 1;
+      const waitMs = 1_000 * nextAttempt;
+      updateProgressLabel(`Attempt ${attempt} failed. Retrying in ${waitMs / 1000}s...`);
+      await sleep(waitMs);
+      return attemptScan({ directory, excludeFolders, scanId, attempt: nextAttempt, maxAttempts });
+    }
+
+    throw error;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
 async function handleSubmit(event) {
   event.preventDefault();
   const rawDirectory = directoryInput.value.trim();
@@ -975,32 +1066,19 @@ async function handleSubmit(event) {
   resetHiddenProjects();
   const scanId = Date.now();
   activeScanId = scanId;
+  startProgress('Scanning projects');
 
   const excludeFolders = getExcludedFolders();
+  let scanSucceeded = false;
 
   try {
-    const response = await fetch('/.netlify/functions/scan-projects', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ directory, excludeFolders }),
-    });
-
-    const rawBody = await response.text();
-    let payload;
-
-    try {
-      payload = rawBody ? JSON.parse(rawBody) : {};
-    } catch (parseError) {
-      const fallbackMessage = rawBody?.slice(0, 200) || 'Invalid server response';
-      throw new Error(`Request failed: ${fallbackMessage}`);
+    const payload = await attemptScan({ directory, excludeFolders, scanId });
+    if (!payload) {
+      stopProgress(false);
+      return;
     }
 
-    if (!response.ok) {
-      const message = payload?.error || response.statusText;
-      throw new Error(`Request failed: ${message}`);
-    }
-
-    const { projects, duplicates, sharedIdentifiers } = payload;
+    const { projects, duplicates, sharedIdentifiers, timedOut, scannedFileCount, timeElapsedMs } = payload;
 
     if (scanId !== activeScanId) {
       return;
@@ -1014,11 +1092,19 @@ async function handleSubmit(event) {
     filtersSection.hidden = projects.length === 0;
 
     applyFilters();
-    setStatus(`Scanned ${projects.length} project${projects.length === 1 ? '' : 's'}.`, 'success');
+    const timeSeconds = Math.round((timeElapsedMs || 0) / 100) / 10;
+    const summary = [`Scanned ${projects.length} project${projects.length === 1 ? '' : 's'}.`];
+    if (scannedFileCount) summary.push(`${scannedFileCount} files processed`);
+    if (timeSeconds) summary.push(`${timeSeconds}s elapsed`);
+    if (timedOut) summary.push('Ended early to avoid timeout — try narrowing the path or exclusions.');
+
+    setStatus(summary.join(' · '), timedOut ? 'warn' : 'success');
+    scanSucceeded = true;
   } catch (error) {
     console.error(error);
     setStatus(error.message || 'Scanning failed.', 'error');
   }
+  stopProgress(scanSucceeded);
 }
 
 pickButton.addEventListener('click', tryDirectoryPicker);

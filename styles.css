@@ -204,6 +204,33 @@ button.ghost {
   color: var(--success);
 }
 
+.progress {
+  position: relative;
+  margin-top: 10px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: #0b1222;
+  border: 1px solid var(--border);
+  overflow: hidden;
+}
+
+.progress__bar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 100%;
+  width: 0%;
+  background: linear-gradient(90deg, rgba(14, 165, 233, 0.3), rgba(14, 165, 233, 0.8));
+  transition: width 0.4s ease;
+}
+
+.progress__label {
+  position: relative;
+  z-index: 1;
+  font-weight: 600;
+  color: var(--text);
+}
+
 .grid {
   display: grid;
   grid-template-columns: 1fr;
