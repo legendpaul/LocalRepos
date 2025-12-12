@@ -985,7 +985,15 @@ async function handleSubmit(event) {
       body: JSON.stringify({ directory, excludeFolders }),
     });
 
-    const payload = await response.json();
+    const rawBody = await response.text();
+    let payload;
+
+    try {
+      payload = rawBody ? JSON.parse(rawBody) : {};
+    } catch (parseError) {
+      const fallbackMessage = rawBody?.slice(0, 200) || 'Invalid server response';
+      throw new Error(`Request failed: ${fallbackMessage}`);
+    }
 
     if (!response.ok) {
       const message = payload?.error || response.statusText;
